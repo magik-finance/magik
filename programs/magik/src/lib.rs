@@ -101,8 +101,6 @@ pub struct Init<'info> {
 
     pub mint_token: Account<'info, Mint>,
 
-    pub mint_reward: Account<'info, Mint>,
-
     #[account(mut, signer)]
     pub payer: AccountInfo<'info>,
 
