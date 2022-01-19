@@ -26,6 +26,13 @@ pub mod magik {
 
         vault.percent = percent;
 
+        emit!(InitVault {
+            mint_token: vault.mint_token,
+            vault_token: vault.vault_token,
+            vault_mint: vault.vault_mint,
+            payer : vault.payer,
+            percent: vault.percent,
+        });
         Ok(())
     }
 
@@ -150,4 +157,13 @@ pub struct Deposit<'info> {
     owner: AccountInfo<'info>,
 
     token_program: AccountInfo<'info>,
+}
+
+#[event]
+pub struct InitVault {
+    pub payer: Pubkey,
+    pub mint_token: Pubkey,  // The token this vault keep
+    pub vault_token: Pubkey, // PDA for this vault keep the token
+    pub vault_mint: Pubkey,  // LP token mint
+    pub percent: u64,
 }
