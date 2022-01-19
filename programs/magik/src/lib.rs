@@ -1,3 +1,5 @@
+mod parameters;
+
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     system_program,
@@ -6,18 +8,22 @@ use anchor_lang::solana_program::{
 use anchor_spl::token::{self, Mint, TokenAccount, Transfer, MintTo, Burn};
 use std::mem::size_of;
 
+use crate::{parameters::Parameters};
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod magik {
     use super::*;
 
     pub fn init(ctx: Context<Init>, bump: Bump, percent: u64) -> ProgramResult {
+        Parameters::verify_percent(percent);
+
         let ref mut vault = ctx.accounts.vault;
         vault.bump = bump.vault_bump;
         vault.mint_token = ctx.accounts.mint_token.key();
         vault.vault_token = ctx.accounts.vault_token.key();
         vault.vault_mint = ctx.accounts.vault_mint.key();
         vault.payer = ctx.accounts.payer.key();
+
         vault.percent = percent;
 
         Ok(())
