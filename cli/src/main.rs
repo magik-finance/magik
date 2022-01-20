@@ -7,6 +7,7 @@ use solana_sdk::{
 };
 use std::{rc::Rc, str::FromStr, thread, time::Duration};
 
+use magik_program::{self};
 fn main() {
     let matches = clap::App::new("Magik CLI toolkit")
         .version("1.0")
@@ -15,11 +16,6 @@ fn main() {
         .subcommand(
             SubCommand::with_name("init_obligation")
                 .arg(
-                    clap::Arg::with_name("owners")
-                        .long("obligation_owner")
-                        .default_value(""),
-                )
-                .arg(
                     clap::Arg::with_name("obligation")
                         .long("obligation")
                         .default_value(""),
@@ -27,6 +23,11 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("lending_market")
                         .long("lending_market")
+                        .default_value(""),
+                )
+                .arg(
+                    clap::Arg::with_name("mint_token")
+                        .long("mint_token")
                         .default_value(""),
                 ),
         )
@@ -74,7 +75,54 @@ fn main() {
 
     match matches.subcommand_name() {
         Some("init_obligation") => {
-            let payer = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+            let matches = matches.subcommand_matches("init_obligation").unwrap();
+            let lending_market_str = matches.value_of("lending_market").unwrap();
+            let lending_market = Pubkey::from_str(lending_market_str).unwrap();
+
+            let mint_token = Pubkey::from_str(matches.value_of("mint_token").unwrap()).unwrap();
+
+            let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+
+            let (vault, vault_bump) = Pubkey::find_program_address(
+                &[b"vault", mint_token.as_ref(), authority.pubkey().as_ref()],
+                &program_id,
+            );
+
+            let (vault_token, token_bump) = Pubkey::find_program_address(
+                &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
+                &program_id,
+            );
+            let (synth_token, mint_bump) = Pubkey::find_program_address(
+                &[b"synth_token", mint_token.as_ref(), vault.as_ref()],
+                &program_id,
+            );
+
+            let rs = program_client
+                .request()
+                .accounts(magik_program::accounts::Init {
+                    vault,
+                    vault_token,
+                    synth_token,
+                    mint_token,
+                    authority: authority.pubkey(),
+                    obligation: vault,
+                    lending_market,
+                    system_program: system_program::id(),
+                    token_program: spl_token::ID,
+                    clock: sysvar::clock::ID,
+                    rent: sysvar::rent::ID,
+                })
+                .args(magik_program::instruction::Init {
+                    bump: magik_program::Bump {
+                        mint_bump,
+                        token_bump,
+                        vault_bump,
+                    },
+                    percent: 1,
+                })
+                .signer(&authority)
+                .send();
+            println!("RS: {:?}", rs)
         }
         _ => println!("Unsupported command"),
     }

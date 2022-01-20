@@ -563,6 +563,7 @@ dependencies = [
  "anchor-lang",
  "anyhow",
  "clap",
+ "magik-program",
  "shellexpand",
  "solana-sdk",
  "spl-token",
@@ -1539,7 +1540,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "magik"
+name = "magik-program"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
