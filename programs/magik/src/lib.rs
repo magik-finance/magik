@@ -8,10 +8,13 @@ use anchor_lang::solana_program::{
 use anchor_spl::token::{self, Mint, TokenAccount, Transfer, MintTo, Burn};
 use std::mem::size_of;
 
+use port_anchor_adaptor::InitObligation;
+
 use crate::{parameters::Parameters};
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod magik {
+
     use super::*;
 
     pub fn init(ctx: Context<Init>, bump: Bump, percent: u64) -> ProgramResult {
@@ -26,6 +29,20 @@ pub mod magik {
 
         vault.percent = percent;
 
+        let cpi_account = InitObligation {
+            clock: ctx.accounts.clock.to_account_info(),
+            lending_market: ctx.accounts.lending_market.to_account_info(),
+            obligation: ctx.accounts.obligation.to_account_info(),
+            obligation_owner: ctx.accounts.obligation_owner.to_account_info(),
+            rent: ctx.accounts.rent.to_account_info(),
+            spl_token_id: ctx.accounts.token_program.to_account_info(),
+        };
+
+        let port_program = ctx.accounts.mint_token.to_account_info();
+        let init_obligation_ctx = CpiContext::new(port_program, cpi_account);
+
+        port_anchor_adaptor::init_obligation(init_obligation_ctx)?;
+
         emit!(InitVault {
             mint_token: vault.mint_token,
             vault_token: vault.vault_token,
@@ -35,6 +52,7 @@ pub mod magik {
         });
         Ok(())
     }
+
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> ProgramResult {
         //User mint synthSTBL up to 50% of they STBL position
@@ -71,6 +89,15 @@ pub mod magik {
         // deposits STBL in single asset yield generating vaults
         Ok(())
     }
+
+    pub fn lending(ctx: Context<Lending>, amount: u64) -> ProgramResult { 
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Lending {
+    // For each token we have one vault
 }
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
 pub struct Bump {
@@ -124,6 +151,11 @@ pub struct Init<'info> {
 
     #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
+
+    pub obligation: AccountInfo<'info>,
+    pub lending_market: AccountInfo<'info>,
+    pub obligation_owner: AccountInfo<'info>,
+    pub clock: AccountInfo<'info>,
 }
 
 #[account]
