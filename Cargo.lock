@@ -564,6 +564,8 @@ dependencies = [
  "anyhow",
  "clap",
  "magik-program",
+ "port-staking-instructions 0.2.0",
+ "port-variable-rate-lending-instructions",
  "shellexpand",
  "solana-sdk",
  "spl-token",

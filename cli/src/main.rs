@@ -108,6 +108,7 @@ fn main() {
                     obligation: vault,
                     lending_market,
                     system_program: system_program::id(),
+                    port_program: port_variable_rate_lending_instructions::id(),
                     token_program: spl_token::ID,
                     clock: sysvar::clock::ID,
                     rent: sysvar::rent::ID,
