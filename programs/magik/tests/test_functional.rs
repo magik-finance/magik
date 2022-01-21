@@ -3,6 +3,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
 use magik_program;
+use solana_program::system_instruction;
 use solana_program::system_program;
 use solana_program::sysvar;
 use solana_sdk::signature::Keypair;
@@ -112,7 +113,18 @@ async fn test_init() {
     let user_keypair = Keypair::new();
     let token_keypair = Keypair::new();
     let mint_token = token_keypair.pubkey();
-
+    // Fund user
+    helper::process_and_assert_ok(
+        &[system_instruction::transfer(
+            &payer_keypair.pubkey(),
+            &user_keypair.pubkey(),
+            10_000_000_000,
+        )],
+        &payer_keypair,
+        &[],
+        &mut banks_client,
+    )
+    .await;
     let (vault, vault_bump) = Pubkey::find_program_address(
         &[
             b"vault",
@@ -125,8 +137,8 @@ async fn test_init() {
         &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
         &program_id,
     );
-    let (synth_token, mint_bump) = Pubkey::find_program_address(
-        &[b"synth_token", mint_token.as_ref(), vault.as_ref()],
+    let (synth_mint, mint_bump) = Pubkey::find_program_address(
+        &[b"synth_mint", mint_token.as_ref(), vault.as_ref()],
         &program_id,
     );
 
@@ -160,7 +172,7 @@ async fn test_init() {
                 vault,
                 vault_token,
                 mint_token,
-                synth_token,
+                synth_mint,
                 port_program,
                 authority: payer_keypair.pubkey(),
                 obligation: vault,
@@ -177,14 +189,107 @@ async fn test_init() {
     )
     .await
     .ok()
-    .unwrap_or_else(|| panic!("Can not create Init "));
+    .unwrap_or_else(|| panic!("Can not Init "));
 
-    let user_vault = init_user_synth_token(
+    let user_synth = init_user_synth_token(
         &mut banks_client,
-        synth_token,
+        synth_mint,
         &user_keypair,
         &token_keypair,
         &payer_keypair,
     )
     .await;
+
+    let (treasure, treasure_bump) = Pubkey::find_program_address(
+        &[b"treasure", vault.as_ref(), user_keypair.pubkey().as_ref()],
+        &program_id,
+    );
+    process_ins(
+        &mut banks_client,
+        &[Instruction {
+            program_id,
+            data: magik_program::instruction::Deposit {
+                bump: treasure_bump,
+                amount: 5000,
+            }
+            .data(),
+            accounts: magik_program::accounts::Deposit {
+                vault,
+                vault_token,
+                user_token: user_ata,
+                owner: user_keypair.pubkey(),
+                user_synth,
+                treasure,
+                rent: sysvar::rent::ID,
+                system_program: system_program::id(),
+                token_program: spl_token::id(),
+            }
+            .to_account_metas(None),
+        }],
+        &payer_keypair,
+        &[&user_keypair],
+    )
+    .await
+    .ok()
+    .unwrap_or_else(|| panic!("Can not Deposit"));
+
+    let mut borrow_amount = 1000;
+    process_ins(
+        &mut banks_client,
+        &[Instruction {
+            program_id,
+            data: magik_program::instruction::Borrow {
+                bump: treasure_bump,
+                amount: borrow_amount,
+            }
+            .data(),
+            accounts: magik_program::accounts::Borrow {
+                vault,
+                vault_token,
+                synth_mint,
+                owner: user_keypair.pubkey(),
+                user_synth,
+                treasure,
+                system_program: system_program::id(),
+                token_program: spl_token::id(),
+            }
+            .to_account_metas(None),
+        }],
+        &payer_keypair,
+        &[&user_keypair],
+    )
+    .await
+    .ok()
+    .unwrap_or_else(|| panic!("Can not Borrow"));
+    helper::verify_token_amount(synth_mint, user_synth, borrow_amount, &mut banks_client).await;
+
+    borrow_amount = 3000;
+    let isErr = process_ins(
+        &mut banks_client,
+        &[Instruction {
+            program_id,
+            data: magik_program::instruction::Borrow {
+                bump: treasure_bump,
+                amount: borrow_amount,
+            }
+            .data(),
+            accounts: magik_program::accounts::Borrow {
+                vault,
+                vault_token,
+                synth_mint,
+                owner: user_keypair.pubkey(),
+                user_synth,
+                treasure,
+                system_program: system_program::id(),
+                token_program: spl_token::id(),
+            }
+            .to_account_metas(None),
+        }],
+        &payer_keypair,
+        &[&user_keypair],
+    )
+    .await.is_err();
+    assert_eq!(isErr, true);
+
+    helper::verify_token_amount(synth_mint, user_synth, 1000, &mut banks_client).await
 }

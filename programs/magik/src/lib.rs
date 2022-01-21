@@ -21,7 +21,7 @@ pub mod magik {
             vault.bump = param.bump.vault_bump;
             vault.mint_token = ctx.accounts.mint_token.key();
             vault.vault_token = ctx.accounts.vault_token.key();
-            vault.synth_token = ctx.accounts.synth_token.key();
+            vault.synth_token = ctx.accounts.synth_mint.key();
             vault.payer = ctx.accounts.authority.key();
 
             vault.percent = param.percent;
@@ -65,9 +65,8 @@ pub mod magik {
         Ok(())
     }
 
-    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> ProgramResult {
+    pub fn deposit(ctx: Context<Deposit>, bump: u8, amount: u64) -> ProgramResult {
         msg!("Deposit {}", amount);
-        //User mint synthSTBL up to 50% of they STBL position
         let cpi_accounts = Transfer {
             from: ctx.accounts.user_token.to_account_info().clone(),
             to: ctx.accounts.vault_token.to_account_info().clone(),
@@ -86,36 +85,36 @@ pub mod magik {
         Ok(())
     }
 
-    pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
+    pub fn borrow(ctx: Context<Borrow>, bump: u8, amount: u64) -> ProgramResult {
         msg!("Borrow {}", amount);
         let ref mut treasure = ctx.accounts.treasure;
         let ref vault = ctx.accounts.vault;
         let total_borrow = treasure.current_borrow + amount;
-        if total_borrow * vault.percent / 100 > treasure.current_deposit {
+        msg!("Current {} total {}", treasure.current_borrow, total_borrow);
+        if total_borrow / vault.percent * 100 > treasure.current_deposit {
             return Err(VaultError::ExceedBorrowAmount.into());
         }
 
-        //User mint synthSTBL up to 50% of they STBL position
+        // User mint synthSTBL up to 50% of they STBL position
         let cpi_program = ctx.accounts.token_program.clone();
-        let signer_seeds = &[
+        let seeds = &[
             b"vault".as_ref(),
             ctx.accounts.vault.mint_token.as_ref(),
             ctx.accounts.vault.payer.as_ref(),
             &[ctx.accounts.vault.bump],
         ];
-        let signer = &[&signer_seeds[..]];
+        let signer_seeds = &[&seeds[..]];
         let mint_to_ctx = CpiContext::new_with_signer(
             cpi_program,
             MintTo {
-                mint: ctx.accounts.vault_mint.to_account_info().clone(),
-                to: ctx.accounts.user_vault.to_account_info().clone(),
+                mint: ctx.accounts.synth_mint.to_account_info().clone(),
+                to: ctx.accounts.user_synth.to_account_info().clone(),
                 authority: ctx.accounts.vault.to_account_info().clone(),
             },
-            signer,
+            signer_seeds,
         );
 
-        let mint_amount = amount * ctx.accounts.vault.percent / 100;
-        token::mint_to(mint_to_ctx, mint_amount)?;
+        token::mint_to(mint_to_ctx, amount)?;
 
         treasure.current_borrow += amount;
 

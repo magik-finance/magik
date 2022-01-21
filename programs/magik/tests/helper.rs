@@ -2,6 +2,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
+use anchor_spl::token::TokenAccount;
 use assert_matches::assert_matches;
 use magik_program;
 
@@ -14,6 +15,27 @@ use {
 };
 
 use solana_sdk::{commitment_config::CommitmentLevel, signature::Signer, transaction::Transaction};
+
+pub async fn process_and_assert_ok(
+    instructions: &[Instruction],
+    payer: &Keypair,
+    signers: &[&Keypair],
+    banks_client: &mut BanksClient,
+) {
+    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+
+    let mut all_signers = vec![payer];
+    all_signers.extend_from_slice(signers);
+
+    let tx = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &all_signers,
+        recent_blockhash,
+    );
+
+    assert_matches!(banks_client.process_transaction(tx).await, Ok(()));
+}
 
 pub async fn process_ins(
     banks_client: &mut BanksClient,
@@ -95,4 +117,26 @@ pub async fn mint_to(
     );
 
     assert_matches!(banks_client.process_transaction(transaction).await, Ok(()));
+}
+
+pub async fn verify_token_amount(
+    mint_account: Pubkey,
+    owner_account: Pubkey,
+    amount: u64,
+    banks_client: &mut BanksClient,
+) {
+    let user_lq = banks_client
+        .get_account(owner_account)
+        .await
+        .unwrap()
+        .unwrap()
+        .data;
+
+    let token_acc = TokenAccount::try_deserialize(&mut &user_lq[..]).unwrap();
+    assert_eq!(
+        token_acc.amount, amount,
+        "TOKEN {} AMOUNT {}",
+        token_acc.amount, amount,
+    );
+    assert_eq!(token_acc.mint, mint_account);
 }

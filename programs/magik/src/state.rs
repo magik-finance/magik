@@ -59,13 +59,13 @@ pub struct Init<'info> {
 
     #[account(
         init, 
-        seeds = [b"synth_token", mint_token.key().as_ref(), vault.key().as_ref()],
+        seeds = [b"synth_mint", mint_token.key().as_ref(), vault.key().as_ref()],
         bump = param.bump.mint_bump,
         mint::authority = vault,
         mint::decimals = mint_token.decimals,
         payer = authority,
     )]
-    pub synth_token: Account<'info, Mint>,
+    pub synth_mint: Account<'info, Mint>,
 
     pub mint_token: Account<'info, Mint>,
 
@@ -103,7 +103,7 @@ pub struct Treasure {
 }
 
 #[derive(Accounts)]
-#[instruction(bump: u8)]
+#[instruction(bump: u8, amount: u64)]
 pub struct Deposit<'info> {
     #[account(
         init_if_needed,
@@ -123,13 +123,10 @@ pub struct Deposit<'info> {
     #[account(mut, constraint = vault_token.mint == vault.mint_token)]
     pub vault_token: Account<'info, TokenAccount>,
 
-    #[account(mut)]
-    pub vault_mint: Account<'info, Mint>,
+    #[account(mut, constraint = user_synth.mint == vault.synth_token)]
+    pub user_synth: Account<'info, TokenAccount>,
 
-    #[account(mut, constraint = user_vault.mint == vault.synth_token)]
-    pub user_vault: Account<'info, TokenAccount>,
-
-    #[account(signer)]
+    #[account(mut, signer)]
     pub owner: AccountInfo<'info>,
 
     #[account(address = spl_token::ID)]
@@ -142,7 +139,7 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(bump: u8)]
+#[instruction(bump: u8, amount: u64)]
 pub struct Borrow<'info> {
     #[account(
         init_if_needed,
@@ -153,25 +150,22 @@ pub struct Borrow<'info> {
     )]
     pub treasure: Account<'info, Treasure>,
 
-    #[account(mut, has_one = owner)]
-    pub user_token: Account<'info, TokenAccount>,
-
-    #[account(mut, constraint = vault.mint_token == user_token.mint)]
+    #[account(mut)]
     pub vault: Account<'info, Vault>,
 
     #[account(mut, constraint = vault_token.mint == vault.mint_token)]
     pub vault_token: Account<'info, TokenAccount>,
 
     #[account(mut)]
-    pub vault_mint: Account<'info, Mint>,
+    pub synth_mint: Account<'info, Mint>,
 
-    #[account(mut, constraint = user_vault.mint == vault.synth_token)]
-    pub user_vault: Account<'info, TokenAccount>,
+    #[account(mut, constraint = user_synth.mint == vault.synth_token)]
+    pub user_synth: Account<'info, TokenAccount>,
 
-    #[account(signer)]
+    #[account(mut, signer)]
     pub owner: AccountInfo<'info>,
 
-    #[account(address = system_program::ID)]
+    #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
 
     #[account(address = system_program::ID)]
