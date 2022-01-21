@@ -1,11 +1,10 @@
 mod parameters;
-mod state;
+pub mod state;
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program};
 use anchor_spl::token::{self, Burn, Mint, MintTo, TokenAccount, Transfer};
 use state::*;
-use std::mem::size_of;
 
 use port_anchor_adaptor::InitObligation;
 
@@ -82,13 +81,20 @@ pub mod magik {
         vault.total_deposit += amount;
 
         let ref mut depositor = ctx.accounts.treasure;
-        depositor.total_deposit += amount;
+        depositor.current_deposit += amount;
 
         Ok(())
     }
 
     pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
         msg!("Borrow {}", amount);
+        let ref mut treasure = ctx.accounts.treasure;
+        let ref vault = ctx.accounts.vault;
+        let total_borrow = treasure.current_borrow + amount;
+        if total_borrow * vault.percent / 100 > treasure.current_deposit {
+            return Err(VaultError::ExceedBorrowAmount.into());
+        }
+
         //User mint synthSTBL up to 50% of they STBL position
         let cpi_program = ctx.accounts.token_program.clone();
         let signer_seeds = &[
@@ -110,6 +116,8 @@ pub mod magik {
 
         let mint_amount = amount * ctx.accounts.vault.percent / 100;
         token::mint_to(mint_to_ctx, mint_amount)?;
+
+        treasure.current_borrow += amount;
 
         Ok(())
     }
@@ -145,4 +153,10 @@ pub mod magik {
         port_anchor_adaptor::deposit_reserve(init_obligation_ctx, amount)?;
         Ok(())
     }
+}
+
+#[error]
+pub enum VaultError {
+    #[msg("Exceed Borrow Amount")]
+    ExceedBorrowAmount,
 }

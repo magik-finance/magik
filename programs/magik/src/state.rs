@@ -35,13 +35,13 @@ pub struct InitParam {
     pub init_obligation: bool,
 }
 #[derive(Accounts)]
-#[instruction(bump: Bump)]
+#[instruction(param: InitParam)]
 pub struct Init<'info> {
     // For each token we have one vault
     #[account(
         init,
         seeds = [b"vault", mint_token.key().as_ref(), authority.key().as_ref()],
-        bump = bump.vault_bump,
+        bump = param.bump.vault_bump,
         payer = authority,
         space = size_of::<Vault>() + 8,
     )]
@@ -50,7 +50,7 @@ pub struct Init<'info> {
     #[account(
         init,
         seeds = [b"vault_token", mint_token.key().as_ref(), vault.key().as_ref()],
-        bump = bump.token_bump,
+        bump = param.bump.token_bump,
         token::mint = mint_token,
         token::authority = vault,
         payer = authority,
@@ -60,7 +60,7 @@ pub struct Init<'info> {
     #[account(
         init, 
         seeds = [b"synth_token", mint_token.key().as_ref(), vault.key().as_ref()],
-        bump = bump.mint_bump,
+        bump = param.bump.mint_bump,
         mint::authority = vault,
         mint::decimals = mint_token.decimals,
         payer = authority,
@@ -99,8 +99,8 @@ pub struct Vault {
 
 #[account]
 pub struct Treasure {
-    pub total_deposit: u64,
-    pub total_borrow: u64,
+    pub current_deposit: u64,
+    pub current_borrow: u64,
 }
 
 #[derive(Accounts)]

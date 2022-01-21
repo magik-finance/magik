@@ -7,7 +7,7 @@ use solana_sdk::{
 };
 use std::{rc::Rc, str::FromStr, thread, time::Duration};
 
-use magik_program::{self};
+use magik_program::{self, state};
 fn main() {
     let matches = clap::App::new("Magik CLI toolkit")
         .version("1.0")
@@ -114,12 +114,15 @@ fn main() {
                     rent: sysvar::rent::ID,
                 })
                 .args(magik_program::instruction::Init {
-                    bump: magik_program::Bump {
-                        mint_bump,
-                        token_bump,
-                        vault_bump,
+                    param: magik_program::state::InitParam {
+                        bump: magik_program::state::Bump {
+                            mint_bump,
+                            token_bump,
+                            vault_bump,
+                        },
+                        init_obligation: true,
+                        percent: 50,
                     },
-                    percent: 1,
                 })
                 .signer(&authority)
                 .send();
