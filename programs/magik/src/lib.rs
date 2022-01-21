@@ -15,17 +15,18 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod magik {
     use super::*;
-    pub fn init(ctx: Context<Init>, bump: Bump, percent: u64) -> ProgramResult {
-        Parameters::verify_percent(percent);
+    pub fn init(ctx: Context<Init>, param: InitParam) -> ProgramResult {
+        msg!("Init params {:?}", param);
+        Parameters::verify_percent(param.percent);
         {
             let ref mut vault = ctx.accounts.vault;
-            vault.bump = bump.vault_bump;
+            vault.bump = param.bump.vault_bump;
             vault.mint_token = ctx.accounts.mint_token.key();
             vault.vault_token = ctx.accounts.vault_token.key();
             vault.synth_token = ctx.accounts.synth_token.key();
             vault.payer = ctx.accounts.authority.key();
 
-            vault.percent = percent;
+            vault.percent = param.percent;
 
             emit!(InitVault {
                 mint_token: vault.mint_token,
@@ -36,38 +37,41 @@ pub mod magik {
             });
         }
 
-        let ref vault = ctx.accounts.vault;
-        let cpi_account = InitObligation {
-            clock: ctx.accounts.clock.to_account_info(),
-            lending_market: ctx.accounts.lending_market.to_account_info(),
-            obligation: ctx.accounts.obligation.to_account_info(),
-            obligation_owner: ctx.accounts.vault.clone().to_account_info(),
-            rent: ctx.accounts.rent.to_account_info(),
-            spl_token_id: ctx.accounts.token_program.to_account_info(),
-        };
+        if param.init_obligation {
+            let ref vault = ctx.accounts.vault;
+            let cpi_account = InitObligation {
+                clock: ctx.accounts.clock.to_account_info(),
+                lending_market: ctx.accounts.lending_market.to_account_info(),
+                obligation: ctx.accounts.obligation.to_account_info(),
+                obligation_owner: ctx.accounts.vault.clone().to_account_info(),
+                rent: ctx.accounts.rent.to_account_info(),
+                spl_token_id: ctx.accounts.token_program.to_account_info(),
+            };
 
-        let port_program = ctx.accounts.port_program.to_account_info();
+            let port_program = ctx.accounts.port_program.to_account_info();
 
-        let seeds = &[
-            b"vault".as_ref(),
-            vault.mint_token.as_ref(),
-            vault.payer.as_ref(),
-            &[vault.bump],
-        ];
+            let seeds = &[
+                b"vault".as_ref(),
+                vault.mint_token.as_ref(),
+                vault.payer.as_ref(),
+                &[vault.bump],
+            ];
 
-        let signer_seeds = &[&seeds[..]];
-        let init_obligation_ctx = CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
+            let signer_seeds = &[&seeds[..]];
+            let init_obligation_ctx = CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
 
-        port_anchor_adaptor::init_obligation(init_obligation_ctx)?;
+            port_anchor_adaptor::init_obligation(init_obligation_ctx)?;
+        }
 
         Ok(())
     }
 
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> ProgramResult {
+        msg!("Deposit {}", amount);
         //User mint synthSTBL up to 50% of they STBL position
         let cpi_accounts = Transfer {
-            from: ctx.accounts.depositor.to_account_info().clone(),
+            from: ctx.accounts.user_token.to_account_info().clone(),
             to: ctx.accounts.vault_token.to_account_info().clone(),
             authority: ctx.accounts.owner.clone(),
         };
@@ -75,6 +79,14 @@ pub mod magik {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
 
+        let ref mut vault = ctx.accounts.vault;
+        vault.total_deposit += amount;
+
+        Ok(())
+    }
+
+    pub fn borrow(ctx: Context<Borrow>, amount: u64) -> ProgramResult {
+        msg!("Borrow {}", amount);
         //User mint synthSTBL up to 50% of they STBL position
         let cpi_program = ctx.accounts.token_program.clone();
         let  signer_seeds = &[
@@ -147,13 +159,19 @@ pub struct LendingCrank<'info> {
     pub clock: AccountInfo<'info>,
     pub token_program: AccountInfo<'info>,
 }
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Debug)]
 pub struct Bump {
     pub vault_bump: u8,
     pub token_bump: u8,
     pub mint_bump: u8,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Debug)]
+pub struct InitParam {
+    pub bump: Bump,
+    pub percent: u64,
+    pub init_obligation: bool,
+}
 #[derive(Accounts)]
 #[instruction(bump: Bump)]
 pub struct Init<'info> {
@@ -214,10 +232,55 @@ pub struct Vault {
     pub vault_token: Pubkey, // PDA for this vault keep the token
     pub synth_token: Pubkey,  // LP token mint
     pub percent: u64,
+    pub total_deposit: u64,
+}
+
+#[account]
+pub struct Depositor {
+
 }
 
 #[derive(Accounts)]
+#[instruction(bump: u8)]
 pub struct Deposit<'info> {
+    #[account(
+        init_if_needed,
+        seeds = [b"depositor", vault.key().as_ref()],
+        bump = bump,
+        payer = owner,
+        space = size_of::<Depositor>() + 8,
+    )]
+    pub depositor: Account<'info, Depositor>,
+
+    #[account(mut, has_one = owner)]
+    pub user_token: Account<'info, TokenAccount>,
+
+    #[account(mut, constraint = vault.mint_token == user_token.mint)]
+    pub vault: Account<'info, Vault>,
+
+    #[account(mut, constraint = vault_token.mint == vault.mint_token)]
+    pub vault_token: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub vault_mint: Account<'info, Mint>,
+
+    #[account(mut, constraint = user_vault.mint == vault.synth_token)]
+    pub user_vault: Account<'info, TokenAccount>,
+
+    #[account(signer)]
+    pub owner: AccountInfo<'info>,
+
+    #[account(address = spl_token::ID)]
+    pub token_program: AccountInfo<'info>,
+
+    #[account(address = system_program::ID)]
+    pub system_program: AccountInfo<'info>,
+
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct Borrow<'info> {
     #[account(mut, has_one = owner)]
     depositor: Account<'info, TokenAccount>,
 

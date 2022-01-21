@@ -23,7 +23,7 @@ fn main() {
                 .arg(
                     clap::Arg::with_name("lending_market")
                         .long("lending_market")
-                        .default_value(""),
+                        .default_value("H27Quk3DSbu55T4dCr1NddTTSAezXwHU67FPCZVKLhSW"),
                 )
                 .arg(
                     clap::Arg::with_name("mint_token")
