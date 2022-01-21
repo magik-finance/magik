@@ -67,9 +67,9 @@ async fn init_user_token(
     user_ata
 }
 
-async fn init_user_vault(
+async fn init_user_synth_token(
     banks_client: &mut BanksClient,
-    vault_mint: Pubkey,
+    synth_mint: Pubkey,
     user_keypair: &Keypair,
     token_keypair: &Keypair,
     payer_keypair: &Keypair,
@@ -80,7 +80,7 @@ async fn init_user_vault(
             spl_associated_token_account::create_associated_token_account(
                 &payer_keypair.pubkey(),
                 &user_keypair.pubkey(),
-                &vault_mint,
+                &synth_mint,
             ),
         ],
         &payer_keypair,
@@ -91,7 +91,7 @@ async fn init_user_vault(
     .unwrap_or_else(|| panic!("Can not create ATA account"));
     let user_vault_ata = spl_associated_token_account::get_associated_token_address(
         &user_keypair.pubkey(),
-        &vault_mint,
+        &synth_mint,
     );
 
     user_vault_ata
@@ -151,7 +151,7 @@ async fn test_init() {
                         token_bump,
                         vault_bump,
                     },
-                    init_obligation: true,
+                    init_obligation: false,
                     percent: 50,
                 },
             }
@@ -179,7 +179,7 @@ async fn test_init() {
     .ok()
     .unwrap_or_else(|| panic!("Can not create Init "));
 
-    let user_vault = init_user_vault(
+    let user_vault = init_user_synth_token(
         &mut banks_client,
         synth_token,
         &user_keypair,

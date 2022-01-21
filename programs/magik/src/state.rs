@@ -72,13 +72,12 @@ pub struct Init<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    pub obligation: AccountInfo<'info>,
-    pub lending_market: AccountInfo<'info>,
+    pub obligation: UncheckedAccount<'info>,
+    pub lending_market: UncheckedAccount<'info>,
+    pub port_program: UncheckedAccount<'info>,
 
     #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
-
-    pub port_program: AccountInfo<'info>,
 
     #[account(address = system_program::ID)]
     pub system_program: AccountInfo<'info>,
