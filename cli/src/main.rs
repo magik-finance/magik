@@ -92,8 +92,8 @@ fn main() {
                 &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
                 &program_id,
             );
-            let (synth_token, mint_bump) = Pubkey::find_program_address(
-                &[b"synth_token", mint_token.as_ref(), vault.as_ref()],
+            let (synth_mint, mint_bump) = Pubkey::find_program_address(
+                &[b"synth_mint", mint_token.as_ref(), vault.as_ref()],
                 &program_id,
             );
 
@@ -102,7 +102,7 @@ fn main() {
                 .accounts(magik_program::accounts::Init {
                     vault,
                     vault_token,
-                    synth_token,
+                    synth_mint,
                     mint_token,
                     authority: authority.pubkey(),
                     obligation: vault,
