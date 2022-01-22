@@ -215,24 +215,3 @@ fn main() {
         _ => println!("Unsupported command"),
     }
 }
-
-#[allow(clippy::too_many_arguments)]
-pub fn init_obligation(
-    program_id: Pubkey,
-    obligation_pubkey: Pubkey,
-    lending_market_pubkey: Pubkey,
-    obligation_owner_pubkey: Pubkey,
-) -> Instruction {
-    Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new(obligation_pubkey, false),
-            AccountMeta::new_readonly(lending_market_pubkey, false),
-            AccountMeta::new_readonly(obligation_owner_pubkey, true),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(sysvar::rent::id(), false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-        ],
-        data: LendingInstruction::InitObligation.pack(),
-    }
-}
