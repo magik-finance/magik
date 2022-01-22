@@ -1,4 +1,4 @@
-
+use anchor_lang::accounts::program_account::ProgramAccount;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program};
 use anchor_spl::token::{self, Mint, TokenAccount};
@@ -7,7 +7,7 @@ use std::mem::size_of;
 #[derive(Accounts)]
 pub struct LendingCrank<'info> {
     pub vault: Account<'info, Vault>,
-    
+
     pub port_program: AccountInfo<'info>,
 
     pub source_liquidity: AccountInfo<'info>,
@@ -39,16 +39,16 @@ pub struct InitParam {
 pub struct Init<'info> {
     // For each token we have one vault
     #[account(
-        init,
+        init_if_needed,
         seeds = [b"vault", mint_token.key().as_ref(), authority.key().as_ref()],
         bump = param.bump.vault_bump,
         payer = authority,
         space = size_of::<Vault>() + 8,
     )]
-    pub vault: Account<'info, Vault>,
+    pub vault: ProgramAccount<'info, Vault>,
 
     #[account(
-        init,
+        init_if_needed,
         seeds = [b"vault_token", mint_token.key().as_ref(), vault.key().as_ref()],
         bump = param.bump.token_bump,
         token::mint = mint_token,
@@ -58,7 +58,7 @@ pub struct Init<'info> {
     pub vault_token: Account<'info, TokenAccount>,
 
     #[account(
-        init, 
+        init_if_needed,
         seeds = [b"synth_mint", mint_token.key().as_ref(), vault.key().as_ref()],
         bump = param.bump.mint_bump,
         mint::authority = vault,
@@ -66,15 +66,16 @@ pub struct Init<'info> {
         payer = authority,
     )]
     pub synth_mint: Account<'info, Mint>,
-
     pub mint_token: Account<'info, Mint>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    #[account(mut)]
     pub obligation: UncheckedAccount<'info>,
+
     pub lending_market: UncheckedAccount<'info>,
-    pub port_program: UncheckedAccount<'info>,
+    pub lending_program: UncheckedAccount<'info>,
 
     #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
@@ -91,7 +92,7 @@ pub struct Vault {
     pub payer: Pubkey,
     pub mint_token: Pubkey,  // The token this vault keep
     pub vault_token: Pubkey, // PDA for this vault keep the token
-    pub synth_token: Pubkey,  // LP token mint
+    pub synth_token: Pubkey, // LP token mint
     pub percent: u64,
     pub total_deposit: u64,
 }
@@ -177,6 +178,6 @@ pub struct InitVault {
     pub payer: Pubkey,
     pub mint_token: Pubkey,  // The token this vault keep
     pub vault_token: Pubkey, // PDA for this vault keep the token
-    pub synth_token: Pubkey,  
+    pub synth_token: Pubkey,
     pub percent: u64,
 }

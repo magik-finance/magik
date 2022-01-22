@@ -150,7 +150,7 @@ async fn test_init() {
     )
     .await;
 
-    let port_program = Pubkey::new_unique();
+    let lending_program = Pubkey::new_unique();
     let lending_market = Pubkey::new_unique();
     process_ins(
         &mut banks_client,
@@ -173,7 +173,7 @@ async fn test_init() {
                 vault_token,
                 mint_token,
                 synth_mint,
-                port_program,
+                lending_program,
                 authority: payer_keypair.pubkey(),
                 obligation: vault,
                 lending_market,
@@ -288,7 +288,8 @@ async fn test_init() {
         &payer_keypair,
         &[&user_keypair],
     )
-    .await.is_err();
+    .await
+    .is_err();
     assert_eq!(isErr, true);
 
     helper::verify_token_amount(synth_mint, user_synth, 1000, &mut banks_client).await

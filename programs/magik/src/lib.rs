@@ -12,8 +12,10 @@ use crate::parameters::Parameters;
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod magik {
+    use solana_program::{program::invoke_signed, system_instruction::create_account};
+
     use super::*;
-    pub fn init(ctx: Context<Init>, param: InitParam) -> ProgramResult {
+    pub fn init(ctx: Context<Init>, param: InitParam, nonce: Pubkey, ob_bump: u8) -> ProgramResult {
         msg!("Init params {:?}", param);
         Parameters::verify_percent(param.percent);
         {
@@ -37,6 +39,7 @@ pub mod magik {
 
         if param.init_obligation {
             let ref vault = ctx.accounts.vault;
+            let vault_key = ctx.accounts.vault.clone().key();
             let cpi_account = InitObligation {
                 clock: ctx.accounts.clock.to_account_info(),
                 lending_market: ctx.accounts.lending_market.to_account_info(),
@@ -46,18 +49,40 @@ pub mod magik {
                 spl_token_id: ctx.accounts.token_program.to_account_info(),
             };
 
-            let port_program = ctx.accounts.port_program.to_account_info();
+            let lending_program = ctx.accounts.lending_program.to_account_info();
 
             let seeds = &[
-                b"vault".as_ref(),
-                vault.mint_token.as_ref(),
-                vault.payer.as_ref(),
-                &[vault.bump],
+                b"obligation".as_ref(),
+                nonce.as_ref(),
+                vault_key.as_ref(),
+                &[ob_bump],
             ];
+            let signers_seeds = &[&seeds[..]];
+            invoke_signed(
+                &create_account(
+                    &ctx.accounts.authority.key,
+                    &ctx.accounts.obligation.key,
+                    7266240,
+                    916,
+                    lending_program.key,
+                ),
+                &[
+                    ctx.accounts.authority.to_account_info(),
+                    ctx.accounts.obligation.to_account_info(),
+                ],
+                signers_seeds,
+            )?;
 
-            let signer_seeds = &[&seeds[..]];
+            let vault_seeds = &[
+                b"vault".as_ref(),
+                ctx.accounts.vault.mint_token.as_ref(),
+                ctx.accounts.vault.payer.as_ref(),
+                &[ctx.accounts.vault.bump],
+            ];
+            let vault_signer_seeds = &[&vault_seeds[..]];
+
             let init_obligation_ctx =
-                CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
+                CpiContext::new_with_signer(lending_program, cpi_account, vault_signer_seeds);
 
             port_anchor_adaptor::init_obligation(init_obligation_ctx)?;
         }
