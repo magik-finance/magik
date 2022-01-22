@@ -14,6 +14,7 @@ use solana_sdk::{
     system_program, sysvar,
     transaction::Transaction,
 };
+use std::sync::{Arc, Mutex};
 use std::{mem::size_of, rc::Rc, str::FromStr, thread, time::Duration};
 
 use magik_program::{self, state};
@@ -62,7 +63,7 @@ fn main() {
     let wallet = shellexpand::tilde(wallet).to_string();
     println!("Value for wallet: {}", wallet);
 
-    let cluster_url = matches.value_of("cluster").unwrap();
+    let cluster_url = matches.value_of("cluster").unwrap().to_string();
     println!("Value for cluster: {}", &cluster_url);
 
     let program_id_str = matches.value_of("program_id").unwrap();
@@ -72,15 +73,15 @@ fn main() {
 
     let payer = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
 
-    let cluster = anchor_client::Cluster::from_str(cluster_url).unwrap();
+    let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
 
     let client = Client::new_with_options(
         cluster,
         Rc::new(payer),
         commitment_config::CommitmentConfig::processed(),
     );
-    let magik_client = client.program(magik_program);
 
+    let client = Mutex::new(Arc::new(client));
     let lending_program_id = matches.value_of("lending_program_id").unwrap();
     let lending_program = Pubkey::from_str(lending_program_id).unwrap();
 
@@ -112,9 +113,62 @@ fn main() {
         &[b"obligation", nonce.as_ref(), vault.as_ref()],
         &magik_program,
     );
+
+    let port_program = lending_program;
+    let source_liquidity = obligation;
+    let destination_collateral = obligation;
+    let reserve = obligation;
+    let reserve_liquidity_supply = obligation;
+    let reserve_collateral_mint = obligation;
+    let lending_market_authority = obligation;
+    let transfer_authority = vault;
     match matches.subcommand_name() {
-        Some("crank") => {}
+        Some("crank") => {
+            let lending_handler = thread::spawn(move || {
+                let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+                let wallet = authority.to_bytes();
+                let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
+                let client = Client::new_with_options(
+                    cluster,
+                    Rc::new(authority),
+                    commitment_config::CommitmentConfig::processed(),
+                );
+                loop {
+                    thread::sleep(Duration::from_secs(5));
+                    let authority = Keypair::from_bytes(&wallet).unwrap();
+                    let magik_client = client.program(magik_program);
+                    let rs = magik_client
+                        .request()
+                        .accounts(magik_program::accounts::LendingCrank {
+                            vault,
+                            port_program,
+                            source_liquidity,
+                            destination_collateral,
+                            reserve,
+                            reserve_liquidity_supply,
+                            reserve_collateral_mint,
+                            lending_market,
+                            lending_market_authority,
+                            transfer_authority,
+                            token_program: spl_token::ID,
+                            clock: sysvar::clock::ID,
+                        })
+                        .args(magik_program::instruction::LendingCrank {})
+                        .signer(&authority)
+                        .send();
+                    println!("TX crank lending: {:?} obligation {}", rs, obligation);
+                    assert_eq!(rs.is_err(), false);
+                }
+            });
+            let harvest_handler = thread::spawn(move || {
+                // TODO: Calling harvest onchain
+            });
+
+            lending_handler.join().unwrap();
+            harvest_handler.join().unwrap();
+        }
         Some("init_obligation") => {
+            let magik_client = client.lock().unwrap().program(magik_program);
             let lamports = magik_client
                 .rpc()
                 .get_minimum_balance_for_rent_exemption(space)

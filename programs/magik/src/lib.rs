@@ -151,7 +151,7 @@ pub mod magik {
         Ok(())
     }
 
-    pub fn lending_crank(ctx: Context<LendingCrank>, amount: u64) -> ProgramResult {
+    pub fn lending_crank(ctx: Context<LendingCrank>) -> ProgramResult {
         let ref mut vault = ctx.accounts.vault;
 
         let port_program = ctx.accounts.port_program.to_account_info();
@@ -179,6 +179,7 @@ pub mod magik {
         let init_obligation_ctx =
             CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
 
+        let amount = 1;
         port_anchor_adaptor::deposit_reserve(init_obligation_ctx, amount)?;
         Ok(())
     }
