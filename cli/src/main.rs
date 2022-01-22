@@ -22,23 +22,22 @@ fn main() {
         .version("1.0")
         .author("batphonghan")
         .about("Magik CLI toolkit")
-        .subcommand(
-            SubCommand::with_name("init_obligation")
-                .arg(
-                    clap::Arg::with_name("lending_market")
-                        .long("lending_market")
-                        .default_value("H27Quk3DSbu55T4dCr1NddTTSAezXwHU67FPCZVKLhSW"),
-                )
-                .arg(
-                    clap::Arg::with_name("lending_program_id")
-                        .long("lending_program_id")
-                        .default_value("pdQ2rQQU5zH2rDgZ7xH2azMBJegUzUyunJ5Jd637hC4"),
-                )
-                .arg(
-                    clap::Arg::with_name("mint_token")
-                        .long("mint_token")
-                        .default_value("So11111111111111111111111111111111111111112"), //Reserve Public Keys USDC
-                ),
+        .subcommand(SubCommand::with_name("init_obligation"))
+        .subcommand(SubCommand::with_name("crank"))
+        .arg(
+            clap::Arg::with_name("lending_market")
+                .long("lending_market")
+                .default_value("H27Quk3DSbu55T4dCr1NddTTSAezXwHU67FPCZVKLhSW"),
+        )
+        .arg(
+            clap::Arg::with_name("lending_program_id")
+                .long("lending_program_id")
+                .default_value("pdQ2rQQU5zH2rDgZ7xH2azMBJegUzUyunJ5Jd637hC4"),
+        )
+        .arg(
+            clap::Arg::with_name("mint_token")
+                .long("mint_token")
+                .default_value("So11111111111111111111111111111111111111112"), //Reserve Public Keys USDC
         )
         .arg(
             clap::Arg::with_name("program_id")
@@ -82,41 +81,40 @@ fn main() {
     );
     let magik_client = client.program(magik_program);
 
+    let lending_program_id = matches.value_of("lending_program_id").unwrap();
+    let lending_program = Pubkey::from_str(lending_program_id).unwrap();
+
+    let lending_market_str = matches.value_of("lending_market").unwrap();
+    let lending_market = Pubkey::from_str(lending_market_str).unwrap();
+
+    let mint_token = Pubkey::from_str(matches.value_of("mint_token").unwrap()).unwrap();
+
+    let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+
+    let (vault, vault_bump) = Pubkey::find_program_address(
+        &[b"vault", mint_token.as_ref(), authority.pubkey().as_ref()],
+        &magik_program,
+    );
+
+    let (vault_token, token_bump) = Pubkey::find_program_address(
+        &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
+        &magik_program,
+    );
+    let (synth_mint, mint_bump) = Pubkey::find_program_address(
+        &[b"synth_mint", mint_token.as_ref(), vault.as_ref()],
+        &magik_program,
+    );
+    println!("Value for magik_program: {}", &magik_program);
+    let space = Obligation::LEN;
+    let nonce = Keypair::new().pubkey();
+
+    let (obligation, ob_bump) = Pubkey::find_program_address(
+        &[b"obligation", nonce.as_ref(), vault.as_ref()],
+        &magik_program,
+    );
     match matches.subcommand_name() {
+        Some("crank") => {}
         Some("init_obligation") => {
-            let matches = matches.subcommand_matches("init_obligation").unwrap();
-
-            let lending_program_id = matches.value_of("lending_program_id").unwrap();
-            let lending_program = Pubkey::from_str(lending_program_id).unwrap();
-
-            let lending_market_str = matches.value_of("lending_market").unwrap();
-            let lending_market = Pubkey::from_str(lending_market_str).unwrap();
-
-            let mint_token = Pubkey::from_str(matches.value_of("mint_token").unwrap()).unwrap();
-
-            let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
-
-            let (vault, vault_bump) = Pubkey::find_program_address(
-                &[b"vault", mint_token.as_ref(), authority.pubkey().as_ref()],
-                &magik_program,
-            );
-
-            let (vault_token, token_bump) = Pubkey::find_program_address(
-                &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
-                &magik_program,
-            );
-            let (synth_mint, mint_bump) = Pubkey::find_program_address(
-                &[b"synth_mint", mint_token.as_ref(), vault.as_ref()],
-                &magik_program,
-            );
-            println!("Value for magik_program: {}", &magik_program);
-            let space = Obligation::LEN;
-            let nonce = Keypair::new().pubkey();
-
-            let (obligation, ob_bump) = Pubkey::find_program_address(
-                &[b"obligation", nonce.as_ref(), vault.as_ref()],
-                &magik_program,
-            );
             let lamports = magik_client
                 .rpc()
                 .get_minimum_balance_for_rent_exemption(space)
@@ -152,7 +150,7 @@ fn main() {
                         init_obligation: true,
                         percent: 40,
                     },
-                    ob_bump: ob_bump,
+                    ob_bump,
                     nonce,
                 })
                 .signer(&authority)
