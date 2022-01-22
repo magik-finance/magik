@@ -166,6 +166,8 @@ async fn test_init() {
                     init_obligation: false,
                     percent: 50,
                 },
+                ob_bump: 1,
+                nonce: Pubkey::default(),
             }
             .data(),
             accounts: magik_program::accounts::Init {

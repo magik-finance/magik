@@ -4,6 +4,9 @@ pub mod state;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program};
 use anchor_spl::token::{self, Burn, Mint, MintTo, TokenAccount, Transfer};
+use port_variable_rate_lending_instructions::instruction::LendingInstruction;
+use solana_program::instruction::Instruction;
+use solana_program::program::invoke_signed;
 use state::*;
 
 use port_anchor_adaptor::InitObligation;
@@ -51,6 +54,7 @@ pub mod magik {
 
             let lending_program = ctx.accounts.lending_program.to_account_info();
 
+            let lending_program_id = lending_program.key;
             let seeds = &[
                 b"obligation".as_ref(),
                 nonce.as_ref(),
@@ -84,7 +88,7 @@ pub mod magik {
             let init_obligation_ctx =
                 CpiContext::new_with_signer(lending_program, cpi_account, vault_signer_seeds);
 
-            port_anchor_adaptor::init_obligation(init_obligation_ctx)?;
+            init_obligation(lending_program_id, init_obligation_ctx)?;
         }
 
         Ok(())
@@ -183,4 +187,36 @@ pub mod magik {
 pub enum VaultError {
     #[msg("Exceed Borrow Amount")]
     ExceedBorrowAmount,
+}
+
+pub fn init_obligation<'a, 'b, 'c, 'info>(
+    lending_program: &Pubkey,
+    ctx: CpiContext<'a, 'b, 'c, 'info, InitObligation<'info>>,
+) -> ProgramResult {
+    let ix = Instruction {
+        program_id: *lending_program,
+        accounts: vec![
+            AccountMeta::new(ctx.accounts.obligation.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.lending_market.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.obligation_owner.key(), true),
+            AccountMeta::new_readonly(ctx.accounts.clock.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.rent.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.spl_token_id.key(), false),
+        ],
+        data: LendingInstruction::InitObligation.pack(),
+    };
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.obligation,
+            ctx.accounts.lending_market,
+            ctx.accounts.obligation_owner,
+            ctx.accounts.clock,
+            ctx.accounts.rent,
+            ctx.accounts.spl_token_id,
+            ctx.program,
+        ],
+        ctx.signer_seeds,
+    )
 }
