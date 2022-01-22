@@ -1,3 +1,4 @@
+#![allow(unused)]
 use anchor_lang::accounts::program_account::ProgramAccount;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program};

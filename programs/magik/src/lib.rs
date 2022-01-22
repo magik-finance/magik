@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod parameters;
 pub mod state;
 

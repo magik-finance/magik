@@ -111,7 +111,7 @@ fn main() {
             );
             println!("Value for magik_program: {}", &magik_program);
             let space = Obligation::LEN;
-            let nonce = Pubkey::new_unique();
+            let nonce = Keypair::new().pubkey();
 
             let (obligation, ob_bump) = Pubkey::find_program_address(
                 &[b"obligation", nonce.as_ref(), vault.as_ref()],

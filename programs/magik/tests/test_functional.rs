@@ -98,6 +98,16 @@ async fn init_user_synth_token(
     user_vault_ata
 }
 
+// #[tokio::test]
+// async fn test_init_port() {
+//     port_variable_rate_lending_instructions::id()
+//     let mut test = ProgramTest::new(
+//         "port_finance_variable_rate_lending",
+//         port_finance_variable_rate_lending::id(),
+//         processor!(process_instruction),
+//     );
+// }
+
 #[tokio::test]
 async fn test_init() {
     let program_id = Pubkey::from_str("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS").unwrap();
