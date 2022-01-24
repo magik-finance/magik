@@ -592,6 +592,7 @@ dependencies = [
  "magik-program",
  "port-variable-rate-lending-instructions",
  "shellexpand",
+ "solana-clap-utils",
  "solana-sdk",
  "spl-token",
 ]

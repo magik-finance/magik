@@ -5,6 +5,7 @@ use port_variable_rate_lending_instructions;
 use port_variable_rate_lending_instructions::{
     instruction::LendingInstruction, state as port_state,
 };
+use solana_clap_utils::input_parsers::pubkey_of;
 use solana_sdk::account::ReadableAccount;
 use solana_sdk::program_pack::Pack;
 use solana_sdk::{
@@ -41,19 +42,9 @@ fn main() -> std::result::Result<(), ClientError> {
             ),
         )
         .arg(
-            clap::Arg::with_name("lending_market")
-                .long("lending_market")
-                .default_value("H27Quk3DSbu55T4dCr1NddTTSAezXwHU67FPCZVKLhSW"),
-        )
-        .arg(
-            clap::Arg::with_name("lending_program_id")
-                .long("lending_program_id")
-                .default_value("pdQ2rQQU5zH2rDgZ7xH2azMBJegUzUyunJ5Jd637hC4"),
-        )
-        .arg(
-            clap::Arg::with_name("mint_token")
-                .long("mint_token")
-                .default_value("So11111111111111111111111111111111111111112"), //Reserve Public Keys USDC
+            clap::Arg::with_name("reserve")
+                .long("reserve")
+                .default_value("6FeVStQAGPWvfWijDHF7cTWRCi7He6vTT3ubfNhe9SPt"),
         )
         .arg(
             clap::Arg::with_name("program_id")
@@ -88,7 +79,7 @@ fn main() -> std::result::Result<(), ClientError> {
 
     let payer = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
 
-    let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
+    let cluster = anchor_client::Cluster::from_str(cluster_url.clone().as_str()).unwrap();
 
     let client = Client::new_with_options(
         cluster,
@@ -97,13 +88,16 @@ fn main() -> std::result::Result<(), ClientError> {
     );
 
     let client = Mutex::new(Arc::new(client));
-    let lending_program_id = matches.value_of("lending_program_id").unwrap();
-    let lending_program = Pubkey::from_str(lending_program_id).unwrap();
+    let lending_program = pubkey_of(&matches, "lending_program_id").unwrap();
 
-    let lending_market_str = matches.value_of("lending_market").unwrap();
-    let lending_market = Pubkey::from_str(lending_market_str).unwrap();
+    let rpc = RpcClient::new(cluster_url.clone());
+    let reserve = pubkey_of(&matches, "reserve").unwrap();
+    let reserve_data = rpc.get_account_data(&reserve).unwrap();
+    let reserve_state = port_state::Reserve::unpack(&reserve_data).unwrap();
+    println!("\n reserse DATA {:?} \n", reserve_state);
 
-    let mint_token = Pubkey::from_str(matches.value_of("mint_token").unwrap()).unwrap();
+    let mint_token = reserve_state.collateral.mint_pubkey;
+    let lending_market = reserve_state.lending_market;
 
     let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
 
@@ -170,11 +164,9 @@ fn main() -> std::result::Result<(), ClientError> {
             let obligation_str = matches.value_of("obligation").unwrap();
             let obligation = Pubkey::from_str(obligation_str).unwrap();
             let source_liquidity = vault_token;
-            let reserve = Pubkey::from_str("6FeVStQAGPWvfWijDHF7cTWRCi7He6vTT3ubfNhe9SPt").unwrap();
-            let reserve_liquidity_supply =
-                Pubkey::from_str("AbKeR7nQdHPDddiDQ71YUsz1F138a7cJMfJVtpdYUSvE").unwrap(); //Supply Public Keys
-            let reserve_collateral_mint =
-                Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(); //Reserve Public Keys SOL
+
+            let reserve_liquidity_supply = reserve_state.liquidity.supply_pubkey;
+            let reserve_collateral_mint = reserve_state.collateral.mint_pubkey;
 
             let port_program = lending_program;
             let transfer_authority = vault;
