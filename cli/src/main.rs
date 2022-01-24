@@ -2,7 +2,10 @@ use anchor_client::{solana_client::rpc_client::RpcClient, Client, ClientError};
 use anchor_lang::prelude::*;
 use clap::{Result, SubCommand};
 use port_variable_rate_lending_instructions;
-use port_variable_rate_lending_instructions::{instruction::LendingInstruction, state::Obligation};
+use port_variable_rate_lending_instructions::{
+    instruction::LendingInstruction, state as port_state,
+};
+use solana_sdk::account::ReadableAccount;
 use solana_sdk::program_pack::Pack;
 use solana_sdk::{
     commitment_config,
@@ -14,17 +17,29 @@ use solana_sdk::{
     system_program, sysvar,
     transaction::Transaction,
 };
+use spl_token::instruction::initialize_account;
+use spl_token::{
+    instruction::approve,
+    state::{Account as Token, AccountState, Mint},
+};
 use std::sync::{Arc, Mutex};
 use std::{mem::size_of, rc::Rc, str::FromStr, thread, time::Duration};
 
 use magik_program::{self, state};
-fn main() {
+fn main() -> std::result::Result<(), ClientError> {
     let matches = clap::App::new("Magik CLI toolkit")
         .version("1.0")
         .author("batphonghan")
         .about("Magik CLI toolkit")
         .subcommand(SubCommand::with_name("init_obligation"))
-        .subcommand(SubCommand::with_name("crank"))
+        .subcommand(SubCommand::with_name("dst_collateral"))
+        .subcommand(
+            SubCommand::with_name("crank").arg(
+                clap::Arg::with_name("obligation")
+                    .long("obligation")
+                    .default_value("6WmjCB141XT82BBEdjBPnpssf25CKzHv1cHSchDQFY1n"),
+            ),
+        )
         .arg(
             clap::Arg::with_name("lending_market")
                 .long("lending_market")
@@ -106,26 +121,69 @@ fn main() {
         &magik_program,
     );
     println!("Value for magik_program: {}", &magik_program);
-    let space = Obligation::LEN;
-    let nonce = Keypair::new().pubkey();
+    let space = port_state::Obligation::LEN;
+    // let nonce = Keypair::new().pubkey();
 
-    let (obligation, ob_bump) = Pubkey::find_program_address(
-        &[b"obligation", nonce.as_ref(), vault.as_ref()],
-        &magik_program,
-    );
-
-    let port_program = lending_program;
-    let source_liquidity = obligation;
-    let destination_collateral = obligation;
-    let reserve = obligation;
-    let reserve_liquidity_supply = obligation;
-    let reserve_collateral_mint = obligation;
-    let lending_market_authority = obligation;
-    let transfer_authority = vault;
     match matches.subcommand_name() {
+        Some("dst_collateral") => {
+            let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
+            let rpc = RpcClient::new(cluster_url);
+            let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+            let authority_pubkey = authority.pubkey();
+            let hash = rpc.get_latest_blockhash().unwrap();
+            let temp_token_keypair = Keypair::new();
+            let lamports = rpc
+                .get_minimum_balance_for_rent_exemption(Token::LEN)
+                .unwrap();
+
+            let (collateral, _) =
+                Pubkey::find_program_address(&[lending_market.as_ref()], &lending_program);
+            let create_token_acc_tx = Transaction::new_signed_with_payer(
+                &[
+                    create_account(
+                        &authority_pubkey,
+                        &temp_token_keypair.pubkey(),
+                        lamports,
+                        Token::LEN as u64,
+                        &spl_token::id(),
+                    ),
+                    initialize_account(
+                        &spl_token::id(),
+                        &temp_token_keypair.pubkey(),
+                        &mint_token,
+                        &collateral,
+                    )
+                    .unwrap(),
+                ],
+                Some(&authority_pubkey),
+                &[&authority, &temp_token_keypair],
+                hash,
+            );
+
+            let sigs = rpc
+                .send_and_confirm_transaction(&create_token_acc_tx)
+                .unwrap();
+            println!("create SIG: {}", sigs);
+        }
         Some("crank") => {
+            let matches = matches.subcommand_matches("crank").unwrap();
+            let obligation_str = matches.value_of("obligation").unwrap();
+            let obligation = Pubkey::from_str(obligation_str).unwrap();
+            let source_liquidity = vault_token;
+            let reserve = Pubkey::from_str("6FeVStQAGPWvfWijDHF7cTWRCi7He6vTT3ubfNhe9SPt").unwrap();
+            let reserve_liquidity_supply =
+                Pubkey::from_str("AbKeR7nQdHPDddiDQ71YUsz1F138a7cJMfJVtpdYUSvE").unwrap(); //Supply Public Keys
+            let reserve_collateral_mint =
+                Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(); //Reserve Public Keys SOL
+
+            let port_program = lending_program;
+            let transfer_authority = vault;
+            let (lending_market_authority, _bump_seed) =
+                Pubkey::find_program_address(&[&lending_market.as_ref()], &lending_program);
+
             let lending_handler = thread::spawn(move || {
                 let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+                let authority_pubkey = authority.pubkey();
                 let wallet = authority.to_bytes();
                 let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
                 let client = Client::new_with_options(
@@ -133,8 +191,37 @@ fn main() {
                     Rc::new(authority),
                     commitment_config::CommitmentConfig::processed(),
                 );
+                let rpc = RpcClient::new(cluster_url);
+                let lending_data = rpc.get_account(&lending_market).unwrap().data;
+                let lending = port_state::LendingMarket::unpack(&lending_data).unwrap();
+                println!("LENDING DATA {:?}", lending);
+                let obi_data = rpc.get_account_data(&obligation).unwrap();
+                let obiAccount = port_state::Obligation::unpack(&obi_data).unwrap();
+                println!("obiAccount DATA {:?}", obiAccount);
+
+                //reserve_liquidity_supply
+                // let resert_data = rpc.get_account_data(&reserve_liquidity_supply).unwrap();
+                // let reserse = port_state::ReserveLiquidity::un(&resert_data).unwrap();
+                // println!("reserve_liquidity_supply {:?}", reserse);
+                let resert_data = rpc.get_account_data(&reserve).unwrap();
+                let reserse = port_state::Reserve::unpack(&resert_data).unwrap();
+                println!("\n reserse DATA {:?} \n", reserse);
+
+                let destination_collateral =
+                    Pubkey::from_str("9KBXJ1odMcKx5dxmvFEnPSDhGFLJCX1PdvT3CEc5sRr6").unwrap();
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let tk = Token::unpack(&dst_data).unwrap();
+                println!("TK {:?}", tk);
+
+                let mut c = 0;
                 loop {
-                    thread::sleep(Duration::from_secs(5));
+                    if c >= 1 {
+                        break;
+                    }
+                    c += 1;
+                    thread::sleep(Duration::from_secs(1));
+                    println!("obligation: {}", obligation);
+                    // continue;
                     let authority = Keypair::from_bytes(&wallet).unwrap();
                     let magik_client = client.program(magik_program);
                     let rs = magik_client
@@ -142,14 +229,14 @@ fn main() {
                         .accounts(magik_program::accounts::LendingCrank {
                             vault,
                             port_program,
-                            source_liquidity,
-                            destination_collateral,
                             reserve,
                             reserve_liquidity_supply,
                             reserve_collateral_mint,
+                            source_liquidity,
                             lending_market,
-                            lending_market_authority,
                             transfer_authority,
+                            destination_collateral,   // maybe colle
+                            lending_market_authority, // maybe PDA
                             token_program: spl_token::ID,
                             clock: sysvar::clock::ID,
                         })
@@ -168,6 +255,12 @@ fn main() {
             harvest_handler.join().unwrap();
         }
         Some("init_obligation") => {
+            let nonce = Pubkey::new_unique();
+
+            let (obligation, ob_bump) = Pubkey::find_program_address(
+                &[b"obligation", nonce.as_ref(), vault.as_ref()],
+                &magik_program,
+            );
             let magik_client = client.lock().unwrap().program(magik_program);
             let lamports = magik_client
                 .rpc()
@@ -214,4 +307,5 @@ fn main() {
         }
         _ => println!("Unsupported command"),
     }
+    Ok(())
 }
