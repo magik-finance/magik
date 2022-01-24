@@ -151,7 +151,8 @@ pub mod magik {
         Ok(())
     }
 
-    pub fn lending_crank(ctx: Context<LendingCrank>) -> ProgramResult {
+    pub fn lending_crank(ctx: Context<LendingCrank>, port_program_id: Pubkey) -> ProgramResult {
+        msg!("Borrow {}", port_program_id);
         let ref mut vault = ctx.accounts.vault;
 
         let port_program = ctx.accounts.port_program.to_account_info();
@@ -180,7 +181,7 @@ pub mod magik {
             CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
 
         let amount = 1;
-        deposit_reserve(init_obligation_ctx, amount)?;
+        deposit_reserve(init_obligation_ctx, amount, port_program_id)?;
         Ok(())
     }
 }
@@ -188,9 +189,10 @@ pub mod magik {
 pub fn deposit_reserve<'a, 'b, 'c, 'info>(
     ctx: CpiContext<'a, 'b, 'c, 'info, PortDeposit<'info>>,
     amount: u64,
+    port_program: Pubkey,
 ) -> ProgramResult {
     let ix = deposit_reserve_liquidity(
-        port_variable_rate_lending_instructions::id(),
+        port_program,
         amount,
         ctx.accounts.source_liquidity.key(),
         ctx.accounts.destination_collateral.key(),
@@ -198,6 +200,7 @@ pub fn deposit_reserve<'a, 'b, 'c, 'info>(
         ctx.accounts.reserve_liquidity_supply.key(),
         ctx.accounts.reserve_collateral_mint.key(),
         ctx.accounts.lending_market.key(),
+        ctx.accounts.lending_market_authority.key(),
         ctx.accounts.transfer_authority.key(),
     );
 
@@ -232,12 +235,9 @@ pub fn deposit_reserve_liquidity(
     reserve_liquidity_supply_pubkey: Pubkey,
     reserve_collateral_mint_pubkey: Pubkey,
     lending_market_pubkey: Pubkey,
+    lending_market_authority_pubkey: Pubkey,
     user_transfer_authority_pubkey: Pubkey,
 ) -> Instruction {
-    let (lending_market_authority_pubkey, _bump_seed) = Pubkey::find_program_address(
-        &[&lending_market_pubkey.to_bytes()[..PUBKEY_BYTES]],
-        &program_id,
-    );
     Instruction {
         program_id,
         accounts: vec![

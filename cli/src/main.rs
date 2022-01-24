@@ -47,6 +47,11 @@ fn main() -> std::result::Result<(), ClientError> {
                 .default_value("6FeVStQAGPWvfWijDHF7cTWRCi7He6vTT3ubfNhe9SPt"),
         )
         .arg(
+            clap::Arg::with_name("lending_program_id")
+                .long("lending_program_id")
+                .default_value("pdQ2rQQU5zH2rDgZ7xH2azMBJegUzUyunJ5Jd637hC4"),
+        )
+        .arg(
             clap::Arg::with_name("program_id")
                 .long("program_id")
                 .default_value("CmHZHMPRfsNpYZe1YUJA59EaCfZiQqJAyBrx9oA3QtCg"),
@@ -96,16 +101,14 @@ fn main() -> std::result::Result<(), ClientError> {
     let reserve_state = port_state::Reserve::unpack(&reserve_data).unwrap();
     println!("\n reserse DATA {:?} \n", reserve_state);
 
-    let mint_token = reserve_state.collateral.mint_pubkey;
-    let lending_market = reserve_state.lending_market;
-
     let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
 
+    let mint_token = reserve_state.liquidity.mint_pubkey;
+    let lending_market = reserve_state.lending_market;
     let (vault, vault_bump) = Pubkey::find_program_address(
         &[b"vault", mint_token.as_ref(), authority.pubkey().as_ref()],
         &magik_program,
     );
-
     let (vault_token, token_bump) = Pubkey::find_program_address(
         &[b"vault_token", mint_token.as_ref(), vault.as_ref()],
         &magik_program,
@@ -114,66 +117,36 @@ fn main() -> std::result::Result<(), ClientError> {
         &[b"synth_mint", mint_token.as_ref(), vault.as_ref()],
         &magik_program,
     );
-    println!("Value for magik_program: {}", &magik_program);
+
+    println!("Magik_program: {}", &magik_program);
+    println!("VAULT: {}", &vault);
+    println!("Mint_token: {}", &mint_token);
+    println!("Lending_market: {}", &lending_market);
     let space = port_state::Obligation::LEN;
-    // let nonce = Keypair::new().pubkey();
 
+    let reserve_collateral_mint = reserve_state.collateral.mint_pubkey;
     match matches.subcommand_name() {
-        Some("dst_collateral") => {
-            let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
-            let rpc = RpcClient::new(cluster_url);
-            let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
-            let authority_pubkey = authority.pubkey();
-            let hash = rpc.get_latest_blockhash().unwrap();
-            let temp_token_keypair = Keypair::new();
-            let lamports = rpc
-                .get_minimum_balance_for_rent_exemption(Token::LEN)
-                .unwrap();
-
-            let (collateral, _) =
-                Pubkey::find_program_address(&[lending_market.as_ref()], &lending_program);
-            let create_token_acc_tx = Transaction::new_signed_with_payer(
-                &[
-                    create_account(
-                        &authority_pubkey,
-                        &temp_token_keypair.pubkey(),
-                        lamports,
-                        Token::LEN as u64,
-                        &spl_token::id(),
-                    ),
-                    initialize_account(
-                        &spl_token::id(),
-                        &temp_token_keypair.pubkey(),
-                        &mint_token,
-                        &collateral,
-                    )
-                    .unwrap(),
-                ],
-                Some(&authority_pubkey),
-                &[&authority, &temp_token_keypair],
-                hash,
-            );
-
-            let sigs = rpc
-                .send_and_confirm_transaction(&create_token_acc_tx)
-                .unwrap();
-            println!("create SIG: {}", sigs);
-        }
         Some("crank") => {
             let matches = matches.subcommand_matches("crank").unwrap();
-            let obligation_str = matches.value_of("obligation").unwrap();
-            let obligation = Pubkey::from_str(obligation_str).unwrap();
+            let obligation = pubkey_of(&matches, "obligation").unwrap();
             let source_liquidity = vault_token;
 
             let reserve_liquidity_supply = reserve_state.liquidity.supply_pubkey;
-            let reserve_collateral_mint = reserve_state.collateral.mint_pubkey;
 
             let port_program = lending_program;
             let transfer_authority = vault;
             let (lending_market_authority, _bump_seed) =
                 Pubkey::find_program_address(&[&lending_market.as_ref()], &lending_program);
 
+            /// Number of bytes in a pubkey
+            pub const PUBKEY_BYTES: usize = 32;
+            let (lending_market_authority_pubkey, _bump_seed) = Pubkey::find_program_address(
+                &[&lending_market.to_bytes()[..PUBKEY_BYTES]],
+                &lending_program,
+            );
+
             let lending_handler = thread::spawn(move || {
+                let _waller = wallet.clone();
                 let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
                 let authority_pubkey = authority.pubkey();
                 let wallet = authority.to_bytes();
@@ -183,28 +156,58 @@ fn main() -> std::result::Result<(), ClientError> {
                     Rc::new(authority),
                     commitment_config::CommitmentConfig::processed(),
                 );
-                let rpc = RpcClient::new(cluster_url);
-                let lending_data = rpc.get_account(&lending_market).unwrap().data;
-                let lending = port_state::LendingMarket::unpack(&lending_data).unwrap();
-                println!("LENDING DATA {:?}", lending);
-                let obi_data = rpc.get_account_data(&obligation).unwrap();
-                let obiAccount = port_state::Obligation::unpack(&obi_data).unwrap();
-                println!("obiAccount DATA {:?}", obiAccount);
-
-                //reserve_liquidity_supply
-                // let resert_data = rpc.get_account_data(&reserve_liquidity_supply).unwrap();
-                // let reserse = port_state::ReserveLiquidity::un(&resert_data).unwrap();
-                // println!("reserve_liquidity_supply {:?}", reserse);
-                let resert_data = rpc.get_account_data(&reserve).unwrap();
-                let reserse = port_state::Reserve::unpack(&resert_data).unwrap();
-                println!("\n reserse DATA {:?} \n", reserse);
-
                 let destination_collateral =
-                    Pubkey::from_str("9KBXJ1odMcKx5dxmvFEnPSDhGFLJCX1PdvT3CEc5sRr6").unwrap();
+                    spl_associated_token_account::get_associated_token_address(
+                        &vault,
+                        &reserve_collateral_mint,
+                    );
+                if rpc.get_account_data(&destination_collateral).is_err() {
+                    let authority = read_keypair_file(&_waller).expect("Requires a keypair file");
+                    let hash = rpc.get_latest_blockhash().unwrap();
+                    let create_token_acc_tx = Transaction::new_signed_with_payer(
+                        &[
+                            spl_associated_token_account::create_associated_token_account(
+                                &authority_pubkey,
+                                &vault,
+                                &reserve_collateral_mint,
+                            ),
+                        ],
+                        Some(&authority_pubkey),
+                        &[&authority],
+                        hash,
+                    );
+                    let sigs = rpc
+                        .send_and_confirm_transaction(&create_token_acc_tx)
+                        .unwrap();
+                    println!(
+                        "\n Newly create destination_collateral SIG: {} => {}",
+                        sigs, destination_collateral
+                    );
+                } else {
+                    println!(
+                        "\n>>> Already have destination_collateral  {}",
+                        destination_collateral
+                    );
+                }
                 let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
                 let tk = Token::unpack(&dst_data).unwrap();
-                println!("TK {:?}", tk);
+                println!(">>>>> TK {:?}", tk);
 
+                println!(" vault {} ", vault);
+                println!(" port_program {} ", port_program);
+                println!(" reserve {} ", reserve);
+                println!(" reserve_liquidity_supply {} ", reserve_liquidity_supply);
+                println!(" reserve_collateral_mint {} ", reserve_collateral_mint);
+                println!(" source_liquidity {} ", source_liquidity);
+                println!(" lending_market {} ", lending_market);
+                println!(" transfer_authority {} ", transfer_authority);
+                println!(" destination_collateral {} ", destination_collateral);
+                println!(
+                    " lending_market_authority {} ",
+                    lending_market_authority_pubkey
+                );
+                println!(" token_program {} ", spl_token::ID);
+                println!(" clock {} ", sysvar::clock::ID);
                 let mut c = 0;
                 loop {
                     if c >= 1 {
@@ -227,12 +230,14 @@ fn main() -> std::result::Result<(), ClientError> {
                             source_liquidity,
                             lending_market,
                             transfer_authority,
-                            destination_collateral,   // maybe colle
-                            lending_market_authority, // maybe PDA
+                            destination_collateral, // maybe colle
+                            lending_market_authority: lending_market_authority_pubkey, // maybe PDA
                             token_program: spl_token::ID,
                             clock: sysvar::clock::ID,
                         })
-                        .args(magik_program::instruction::LendingCrank {})
+                        .args(magik_program::instruction::LendingCrank {
+                            port_program_id: port_program,
+                        })
                         .signer(&authority)
                         .send();
                     println!("TX crank lending: {:?} obligation {}", rs, obligation);
@@ -247,8 +252,7 @@ fn main() -> std::result::Result<(), ClientError> {
             harvest_handler.join().unwrap();
         }
         Some("init_obligation") => {
-            let nonce = Pubkey::new_unique();
-
+            let nonce = Keypair::new().pubkey();
             let (obligation, ob_bump) = Pubkey::find_program_address(
                 &[b"obligation", nonce.as_ref(), vault.as_ref()],
                 &magik_program,

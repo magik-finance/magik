@@ -7,20 +7,29 @@ use std::mem::size_of;
 
 #[derive(Accounts)]
 pub struct LendingCrank<'info> {
-    pub vault: Account<'info, Vault>,
+    pub vault: ProgramAccount<'info, Vault>,
+    pub port_program: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub source_liquidity: UncheckedAccount<'info>,
 
-    pub port_program: AccountInfo<'info>,
+    #[account(mut)]
+    pub destination_collateral: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub reserve: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub reserve_liquidity_supply: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub reserve_collateral_mint: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub lending_market: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub lending_market_authority: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub transfer_authority: UncheckedAccount<'info>,
 
-    pub source_liquidity: AccountInfo<'info>,
-    pub destination_collateral: AccountInfo<'info>,
-    pub reserve: AccountInfo<'info>,
-    pub reserve_liquidity_supply: AccountInfo<'info>,
-    pub reserve_collateral_mint: AccountInfo<'info>,
-    pub lending_market: AccountInfo<'info>,
-    pub lending_market_authority: AccountInfo<'info>,
-    pub transfer_authority: AccountInfo<'info>,
-    pub clock: AccountInfo<'info>,
+    #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
+    pub clock: Sysvar<'info, Clock>,
 }
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Debug)]
 pub struct Bump {

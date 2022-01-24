@@ -16,3 +16,4 @@ spl-token = { version = "3.1.1", features = ["no-entrypoint"] }
 anchor-client = "0.20.1"
 port-variable-rate-lending-instructions = "0.3.0"
 solana-clap-utils = "1.8.1"
+spl-associated-token-account = { version = "1.0.2", features = ["no-entrypoint"] }

@@ -594,6 +594,7 @@ dependencies = [
  "shellexpand",
  "solana-clap-utils",
  "solana-sdk",
+ "spl-associated-token-account",
  "spl-token",
 ]
 
