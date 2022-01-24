@@ -27,6 +27,8 @@ pub struct LendingCrank<'info> {
     #[account(mut)]
     pub transfer_authority: UncheckedAccount<'info>,
 
+    // #[account(mut)]
+    // pub oracle: UncheckedAccount<'info>,
     #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
     pub clock: Sysvar<'info, Clock>,
@@ -123,13 +125,13 @@ pub struct Deposit<'info> {
         payer = owner,
         space = size_of::<Treasure>() + 8,
     )]
-    pub treasure: Account<'info, Treasure>,
+    pub treasure: ProgramAccount<'info, Treasure>,
 
     #[account(mut, has_one = owner)]
     pub user_token: Account<'info, TokenAccount>,
 
     #[account(mut, constraint = vault.mint_token == user_token.mint)]
-    pub vault: Account<'info, Vault>,
+    pub vault: ProgramAccount<'info, Vault>,
 
     #[account(mut, constraint = vault_token.mint == vault.mint_token)]
     pub vault_token: Account<'info, TokenAccount>,

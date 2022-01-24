@@ -142,6 +142,7 @@ use solana_program::program_option::COption;
 pub struct RefreshReserve<'info> {
     pub reserve: AccountInfo<'info>,
     pub clock: AccountInfo<'info>,
+    pub oracle: AccountInfo<'info>,
 }
 
 pub fn refresh_port_reserve<'a, 'b, 'c, 'info>(

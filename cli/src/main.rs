@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
 use clap::{Result, SubCommand};
 use port_variable_rate_lending_instructions;
+use port_variable_rate_lending_instructions::instruction::refresh_reserve;
 use port_variable_rate_lending_instructions::{
     instruction::LendingInstruction, state as port_state,
 };
@@ -35,6 +36,7 @@ fn main() -> std::result::Result<(), ClientError> {
         .about("Magik CLI toolkit")
         .subcommand(SubCommand::with_name("init_obligation"))
         .subcommand(SubCommand::with_name("dst_collateral"))
+        .subcommand(SubCommand::with_name("deposit"))
         .subcommand(
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
@@ -123,6 +125,7 @@ fn main() -> std::result::Result<(), ClientError> {
     println!("VAULT: {}", &vault);
     println!("Mint_token: {}", &mint_token);
     println!("Lending_market: {}", &lending_market);
+    println!("Vault_token: {}", &vault_token);
     let space = port_state::Obligation::LEN;
 
     let reserve_collateral_mint = reserve_state.collateral.mint_pubkey;
@@ -212,30 +215,38 @@ fn main() -> std::result::Result<(), ClientError> {
                 loop {
                     thread::sleep(Duration::from_secs(1));
                     let authority = Keypair::from_bytes(&wallet).unwrap();
+
                     let hash = rpc.get_latest_blockhash().unwrap();
                     let tx = Transaction::new_signed_with_payer(
-                        &[Instruction {
-                            accounts: magik_program::accounts::LendingCrank {
-                                vault,
+                        &[
+                            refresh_reserve(
                                 port_program,
                                 reserve,
-                                reserve_liquidity_supply,
-                                reserve_collateral_mint,
-                                source_liquidity,
-                                lending_market,
-                                transfer_authority,
-                                destination_collateral, // maybe colle
-                                lending_market_authority: lending_market_authority_pubkey, // maybe PDA
-                                token_program: spl_token::ID,
-                                clock: sysvar::clock::ID,
-                            }
-                            .to_account_metas(None),
-                            data: magik_program::instruction::LendingCrank {
-                                port_program_id: port_program,
-                            }
-                            .data(),
-                            program_id: magik_program,
-                        }],
+                                reserve_state.liquidity.oracle_pubkey,
+                            ),
+                            Instruction {
+                                accounts: magik_program::accounts::LendingCrank {
+                                    vault,
+                                    port_program,
+                                    reserve,
+                                    reserve_liquidity_supply,
+                                    reserve_collateral_mint,
+                                    source_liquidity,
+                                    lending_market,
+                                    transfer_authority,
+                                    destination_collateral, // maybe colle
+                                    lending_market_authority: lending_market_authority_pubkey,
+                                    token_program: spl_token::ID,
+                                    clock: sysvar::clock::ID,
+                                }
+                                .to_account_metas(None),
+                                data: magik_program::instruction::LendingCrank {
+                                    port_program_id: port_program,
+                                }
+                                .data(),
+                                program_id: magik_program,
+                            },
+                        ],
                         Some(&authority_pubkey),
                         &[&authority],
                         hash,

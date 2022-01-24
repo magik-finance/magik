@@ -182,15 +182,16 @@ pub mod magik {
             CpiContext::new_with_signer(port_program.clone(), cpi_account, signer_seeds);
 
         let amount = 1;
-        let refresh_accounts = RefreshReserve {
-            clock: ctx.accounts.clock.to_account_info(),
-            reserve: ctx.accounts.reserve.to_account_info(),
-        };
+        // let refresh_accounts = RefreshReserve {
+        //     clock: ctx.accounts.clock.to_account_info(),
+        //     reserve: ctx.accounts.reserve.to_account_info(),
+        //     oracle: ctx.accounts.oracle.to_account_info(),
+        // };
 
-        refresh_port_reserve(
-            port_program_id,
-            CpiContext::new(port_program.clone(), refresh_accounts),
-        )?;
+        // refresh_port_reserve(
+        //     port_program_id,
+        //     CpiContext::new(port_program.clone(), refresh_accounts),
+        // )?;
         deposit_reserve(init_obligation_ctx, amount, port_program_id)?;
         Ok(())
     }
