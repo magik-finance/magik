@@ -38,7 +38,7 @@ fn main() -> std::result::Result<(), ClientError> {
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
                     .long("obligation")
-                    .default_value("6WmjCB141XT82BBEdjBPnpssf25CKzHv1cHSchDQFY1n"),
+                    .default_value("AMSYSxjEALjWgmoCBbPwi8MZ2KCXzLWsMP2CCqxgFSNR"),
             ),
         )
         .arg(
@@ -208,15 +208,8 @@ fn main() -> std::result::Result<(), ClientError> {
                 );
                 println!(" token_program {} ", spl_token::ID);
                 println!(" clock {} ", sysvar::clock::ID);
-                let mut c = 0;
                 loop {
-                    if c >= 1 {
-                        break;
-                    }
-                    c += 1;
                     thread::sleep(Duration::from_secs(1));
-                    println!("obligation: {}", obligation);
-                    // continue;
                     let authority = Keypair::from_bytes(&wallet).unwrap();
                     let magik_client = client.program(magik_program);
                     let rs = magik_client
@@ -241,7 +234,6 @@ fn main() -> std::result::Result<(), ClientError> {
                         .signer(&authority)
                         .send();
                     println!("TX crank lending: {:?} obligation {}", rs, obligation);
-                    assert_eq!(rs.is_err(), false);
                 }
             });
             let harvest_handler = thread::spawn(move || {
