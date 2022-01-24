@@ -55,6 +55,7 @@ pub mod magik {
 
             let lending_program = ctx.accounts.lending_program.to_account_info();
 
+            // spl_token::instruction::initialize_account(token_program_id, account_pubkey, mint_pubkey, owner_pubkey)
             let lending_program_id = lending_program.key;
             let seeds = &[
                 b"obligation".as_ref(),
