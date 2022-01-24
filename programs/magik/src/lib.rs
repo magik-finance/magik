@@ -3,14 +3,14 @@ mod parameters;
 pub mod state;
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{pubkey::Pubkey, system_program};
+use anchor_lang::solana_program::{pubkey::Pubkey, system_program, sysvar};
 use anchor_spl::token::{self, Burn, Mint, MintTo, TokenAccount, Transfer};
 use port_variable_rate_lending_instructions::instruction::LendingInstruction;
 use solana_program::instruction::Instruction;
 use solana_program::program::invoke_signed;
 use state::*;
 
-use port_anchor_adaptor::InitObligation;
+// use port_anchor_adaptor::InitObligation;
 
 use crate::parameters::Parameters;
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -55,7 +55,6 @@ pub mod magik {
 
             let lending_program = ctx.accounts.lending_program.to_account_info();
 
-            // spl_token::instruction::initialize_account(token_program_id, account_pubkey, mint_pubkey, owner_pubkey)
             let lending_program_id = lending_program.key;
             let seeds = &[
                 b"obligation".as_ref(),
@@ -163,7 +162,7 @@ pub mod magik {
             &[vault.bump],
         ];
 
-        let cpi_account = port_anchor_adaptor::Deposit {
+        let cpi_account = PortDeposit {
             clock: ctx.accounts.clock.to_account_info(),
             destination_collateral: ctx.accounts.destination_collateral.to_account_info(),
             lending_market: ctx.accounts.lending_market.to_account_info(),
@@ -181,9 +180,94 @@ pub mod magik {
             CpiContext::new_with_signer(port_program, cpi_account, signer_seeds);
 
         let amount = 1;
-        port_anchor_adaptor::deposit_reserve(init_obligation_ctx, amount)?;
+        deposit_reserve(init_obligation_ctx, amount)?;
         Ok(())
     }
+}
+
+pub fn deposit_reserve<'a, 'b, 'c, 'info>(
+    ctx: CpiContext<'a, 'b, 'c, 'info, PortDeposit<'info>>,
+    amount: u64,
+) -> ProgramResult {
+    let ix = deposit_reserve_liquidity(
+        port_variable_rate_lending_instructions::id(),
+        amount,
+        ctx.accounts.source_liquidity.key(),
+        ctx.accounts.destination_collateral.key(),
+        ctx.accounts.reserve.key(),
+        ctx.accounts.reserve_liquidity_supply.key(),
+        ctx.accounts.reserve_collateral_mint.key(),
+        ctx.accounts.lending_market.key(),
+        ctx.accounts.transfer_authority.key(),
+    );
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.source_liquidity,
+            ctx.accounts.destination_collateral,
+            ctx.accounts.reserve,
+            ctx.accounts.reserve_liquidity_supply,
+            ctx.accounts.reserve_collateral_mint,
+            ctx.accounts.lending_market,
+            ctx.accounts.lending_market_authority,
+            ctx.accounts.transfer_authority,
+            ctx.accounts.clock,
+            ctx.accounts.token_program,
+            ctx.program,
+        ],
+        ctx.signer_seeds,
+    )
+}
+/// Number of bytes in a pubkey
+pub const PUBKEY_BYTES: usize = 32;
+/// Creates a 'DepositReserveLiquidity' instruction.
+#[allow(clippy::too_many_arguments)]
+pub fn deposit_reserve_liquidity(
+    program_id: Pubkey,
+    liquidity_amount: u64,
+    source_liquidity_pubkey: Pubkey,
+    destination_collateral_pubkey: Pubkey,
+    reserve_pubkey: Pubkey,
+    reserve_liquidity_supply_pubkey: Pubkey,
+    reserve_collateral_mint_pubkey: Pubkey,
+    lending_market_pubkey: Pubkey,
+    user_transfer_authority_pubkey: Pubkey,
+) -> Instruction {
+    let (lending_market_authority_pubkey, _bump_seed) = Pubkey::find_program_address(
+        &[&lending_market_pubkey.to_bytes()[..PUBKEY_BYTES]],
+        &program_id,
+    );
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(source_liquidity_pubkey, false),
+            AccountMeta::new(destination_collateral_pubkey, false),
+            AccountMeta::new(reserve_pubkey, false),
+            AccountMeta::new(reserve_liquidity_supply_pubkey, false),
+            AccountMeta::new(reserve_collateral_mint_pubkey, false),
+            AccountMeta::new_readonly(lending_market_pubkey, false),
+            AccountMeta::new_readonly(lending_market_authority_pubkey, false),
+            AccountMeta::new_readonly(user_transfer_authority_pubkey, true),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::DepositReserveLiquidity { liquidity_amount }.pack(),
+    }
+}
+
+#[derive(Accounts)]
+pub struct PortDeposit<'info> {
+    pub source_liquidity: AccountInfo<'info>,
+    pub destination_collateral: AccountInfo<'info>,
+    pub reserve: AccountInfo<'info>,
+    pub reserve_liquidity_supply: AccountInfo<'info>,
+    pub reserve_collateral_mint: AccountInfo<'info>,
+    pub lending_market: AccountInfo<'info>,
+    pub lending_market_authority: AccountInfo<'info>,
+    pub transfer_authority: AccountInfo<'info>,
+    pub clock: AccountInfo<'info>,
+    pub token_program: AccountInfo<'info>,
 }
 
 #[error]
@@ -222,4 +306,14 @@ pub fn init_obligation<'a, 'b, 'c, 'info>(
         ],
         ctx.signer_seeds,
     )
+}
+
+#[derive(Accounts)]
+pub struct InitObligation<'info> {
+    pub obligation: AccountInfo<'info>,
+    pub lending_market: AccountInfo<'info>,
+    pub obligation_owner: AccountInfo<'info>,
+    pub clock: AccountInfo<'info>,
+    pub rent: AccountInfo<'info>,
+    pub spl_token_id: AccountInfo<'info>,
 }

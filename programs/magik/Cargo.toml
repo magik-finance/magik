@@ -17,7 +17,7 @@ default = ["test-bpf"]
 test-bpf = []
 
 [dependencies]
-port-anchor-adaptor = {git = "https://github.com/port-finance/port-anchor-adaptor"}
+# port-anchor-adaptor = {git = "https://github.com/port-finance/port-anchor-adaptor"}
 anchor-lang = "0.20.1"
 spl-token = { version = "3.1.1", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.2", features = ["no-entrypoint"] }
@@ -29,5 +29,4 @@ port-variable-rate-lending-instructions = "0.3.0"
 solana-program-test = "1.9.4"
 solana-sdk = "1.9.4"
 assert_matches = "1.5.0"
-port-variable-rate-lending-instructions = "0.2.9"
 port-staking-instructions = {version="0.2.0"}

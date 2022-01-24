@@ -14,5 +14,4 @@ magik-program = {path = "../programs/magik"}
 shellexpand = "2.1.0"
 spl-token = { version = "3.1.1", features = ["no-entrypoint"] }
 anchor-client = "0.20.1"
-port-variable-rate-lending-instructions = "0.2.9"
-port-staking-instructions = "0.2.0"
+port-variable-rate-lending-instructions = "0.3.0"
