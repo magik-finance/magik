@@ -1,5 +1,6 @@
 use anchor_client::{solana_client::rpc_client::RpcClient, Client, ClientError};
 use anchor_lang::prelude::*;
+use anchor_lang::InstructionData;
 use clap::{Result, SubCommand};
 use port_variable_rate_lending_instructions;
 use port_variable_rate_lending_instructions::{
@@ -211,29 +212,39 @@ fn main() -> std::result::Result<(), ClientError> {
                 loop {
                     thread::sleep(Duration::from_secs(1));
                     let authority = Keypair::from_bytes(&wallet).unwrap();
-                    let magik_client = client.program(magik_program);
-                    let rs = magik_client
-                        .request()
-                        .accounts(magik_program::accounts::LendingCrank {
-                            vault,
-                            port_program,
-                            reserve,
-                            reserve_liquidity_supply,
-                            reserve_collateral_mint,
-                            source_liquidity,
-                            lending_market,
-                            transfer_authority,
-                            destination_collateral, // maybe colle
-                            lending_market_authority: lending_market_authority_pubkey, // maybe PDA
-                            token_program: spl_token::ID,
-                            clock: sysvar::clock::ID,
-                        })
-                        .args(magik_program::instruction::LendingCrank {
-                            port_program_id: port_program,
-                        })
-                        .signer(&authority)
-                        .send();
-                    println!("TX crank lending: {:?} obligation {}", rs, obligation);
+                    let hash = rpc.get_latest_blockhash().unwrap();
+                    let tx = Transaction::new_signed_with_payer(
+                        &[Instruction {
+                            accounts: magik_program::accounts::LendingCrank {
+                                vault,
+                                port_program,
+                                reserve,
+                                reserve_liquidity_supply,
+                                reserve_collateral_mint,
+                                source_liquidity,
+                                lending_market,
+                                transfer_authority,
+                                destination_collateral, // maybe colle
+                                lending_market_authority: lending_market_authority_pubkey, // maybe PDA
+                                token_program: spl_token::ID,
+                                clock: sysvar::clock::ID,
+                            }
+                            .to_account_metas(None),
+                            data: magik_program::instruction::LendingCrank {
+                                port_program_id: port_program,
+                            }
+                            .data(),
+                            program_id: magik_program,
+                        }],
+                        Some(&authority_pubkey),
+                        &[&authority],
+                        hash,
+                    );
+                    let sigs = rpc.send_and_confirm_transaction(&tx).unwrap();
+                    println!(
+                        "\n Newly create destination_collateral SIG: {} => {}",
+                        sigs, destination_collateral
+                    );
                 }
             });
             let harvest_handler = thread::spawn(move || {
