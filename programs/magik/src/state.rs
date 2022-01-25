@@ -17,10 +17,16 @@ pub struct RedeemCrank<'info> {
     #[account(mut)]
     pub reserve: AccountInfo<'info>,
 
+    #[account(mut)]
     pub reserve_collateral_mint: AccountInfo<'info>,
+
+    #[account(mut)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
+    #[account(mut)]
     pub lending_market: AccountInfo<'info>,
+    #[account(mut)]
     pub lending_market_authority: AccountInfo<'info>,
+    #[account(mut)]
     pub transfer_authority: AccountInfo<'info>,
 
     #[account(address = spl_token::ID)]

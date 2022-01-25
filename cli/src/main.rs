@@ -261,29 +261,43 @@ fn main() -> std::result::Result<(), ClientError> {
                 let tk = Token::unpack(&dst_data).unwrap();
                 println!(" Destination_collateral {:?}", tk.amount);
 
-                let magik_client = client.program(magik_program);
-                let rs = magik_client
-                    .request()
-                    .accounts(magik_program::accounts::RedeemCrank {
-                        vault,
-                        port_program,
-                        source_collateral: destination_collateral,
-                        destination_liquidity: source_liquidity,
-                        reserve,
-                        reserve_collateral_mint,
-                        reserve_liquidity_supply,
-                        lending_market,
-                        lending_market_authority,
-                        transfer_authority,
-                        token_program: spl_token::ID,
-                        clock: sysvar::clock::ID,
-                    })
-                    .args(magik_program::instruction::RedeemCrank { redeem_amount: 100 })
-                    .signer(&authority)
-                    .send();
-                println!("TX magik_client INIT: {:?} ", rs);
-                assert_eq!(rs.is_err(), false);
+                let authority_pubkey = authority.pubkey();
+                let hash = rpc.get_latest_blockhash().unwrap();
+                let tx = Transaction::new_signed_with_payer(
+                    &[
+                        refresh_reserve(
+                            port_program,
+                            reserve,
+                            reserve_state.liquidity.oracle_pubkey,
+                        ),
+                        Instruction {
+                            accounts: magik_program::accounts::RedeemCrank {
+                                vault,
+                                port_program,
+                                source_collateral: destination_collateral,
+                                destination_liquidity: source_liquidity,
+                                reserve,
+                                reserve_collateral_mint,
+                                reserve_liquidity_supply,
+                                lending_market,
+                                lending_market_authority,
+                                transfer_authority,
+                                token_program: spl_token::ID,
+                                clock: sysvar::clock::ID,
+                            }
+                            .to_account_metas(None),
+                            data: magik_program::instruction::RedeemCrank { redeem_amount: 100 }
+                                .data(),
+                            program_id: magik_program,
+                        },
+                    ],
+                    Some(&authority_pubkey),
+                    &[&authority],
+                    hash,
+                );
+                let sigs = rpc.send_and_confirm_transaction(&tx);
                 let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                println!("\n SIG: {:?}", sigs);
                 let tk = Token::unpack(&dst_data).unwrap();
                 println!(" After after redeem Destination_collateral {:?}", tk.amount);
 
