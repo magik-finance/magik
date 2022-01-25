@@ -169,12 +169,12 @@ fn main() -> std::result::Result<(), ClientError> {
                 let authority = Keypair::from_bytes(&wallet).unwrap();
 
                 let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
-                let tk = Token::unpack(&source_liquidity_data).unwrap();
-                println!(" Source_liquidity_data {:?}", tk.amount);
+                let src = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" Source_liquidity_data {:?}", src.amount);
 
                 let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
-                let tk = Token::unpack(&dst_data).unwrap();
-                println!(" Destination_collateral {:?}", tk.amount);
+                let dst = Token::unpack(&dst_data).unwrap();
+                println!(" Destination_collateral {:?}", dst.amount);
 
                 let hash = rpc.get_latest_blockhash().unwrap();
                 let tx = Transaction::new_signed_with_payer(
@@ -202,7 +202,7 @@ fn main() -> std::result::Result<(), ClientError> {
                             }
                             .to_account_metas(None),
                             data: magik_program::instruction::LendingCrank {
-                                lending_amount: 9,
+                                lending_amount: src.amount,
                             }
                             .data(),
                             program_id: magik_program,
@@ -213,7 +213,7 @@ fn main() -> std::result::Result<(), ClientError> {
                     hash,
                 );
                 let sigs = rpc.send_and_confirm_transaction(&tx);
-                println!("\n SIG: {:?} => {}", sigs, destination_collateral);
+                println!("\n SIG: {:?} => DST: {}", sigs, destination_collateral);
 
                 let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
                 let tk = Token::unpack(&source_liquidity_data).unwrap();
@@ -266,8 +266,8 @@ fn main() -> std::result::Result<(), ClientError> {
                 println!(" Source_liquidity_data {:?}", tk.amount);
 
                 let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
-                let tk = Token::unpack(&dst_data).unwrap();
-                println!(" Destination_collateral {:?}", tk.amount);
+                let dst = Token::unpack(&dst_data).unwrap();
+                println!(" Destination_collateral {:?}", dst.amount);
 
                 let authority_pubkey = authority.pubkey();
                 let hash = rpc.get_latest_blockhash().unwrap();
@@ -294,7 +294,7 @@ fn main() -> std::result::Result<(), ClientError> {
                                 clock: sysvar::clock::ID,
                             }
                             .to_account_metas(None),
-                            data: magik_program::instruction::RedeemCrank { redeem_amount: 100 }
+                            data: magik_program::instruction::RedeemCrank { redeem_amount: dst.amount }
                                 .data(),
                             program_id: magik_program,
                         },
