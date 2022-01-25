@@ -165,57 +165,65 @@ fn main() -> std::result::Result<(), ClientError> {
                     reserve_collateral_mint,
                     &authority,
                 );
-                loop {
-                    let authority = Keypair::from_bytes(&wallet).unwrap();
+                // loop {
+                let authority = Keypair::from_bytes(&wallet).unwrap();
 
-                    let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
-                    let tk = Token::unpack(&source_liquidity_data).unwrap();
-                    println!(" Source_liquidity_data {:?}", tk.amount);
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                let tk = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" Source_liquidity_data {:?}", tk.amount);
 
-                    let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
-                    let tk = Token::unpack(&dst_data).unwrap();
-                    println!(" Destination_collateral {:?}", tk.amount);
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let tk = Token::unpack(&dst_data).unwrap();
+                println!(" Destination_collateral {:?}", tk.amount);
 
-                    let hash = rpc.get_latest_blockhash().unwrap();
-                    let tx = Transaction::new_signed_with_payer(
-                        &[
-                            refresh_reserve(
+                let hash = rpc.get_latest_blockhash().unwrap();
+                let tx = Transaction::new_signed_with_payer(
+                    &[
+                        refresh_reserve(
+                            port_program,
+                            reserve,
+                            reserve_state.liquidity.oracle_pubkey,
+                        ),
+                        // refresh_obligation(port_program, obligation, vec![reserve]),
+                        Instruction {
+                            accounts: magik_program::accounts::LendingCrank {
+                                vault,
                                 port_program,
                                 reserve,
-                                reserve_state.liquidity.oracle_pubkey,
-                            ),
-                            // refresh_obligation(port_program, obligation, vec![reserve]),
-                            Instruction {
-                                accounts: magik_program::accounts::LendingCrank {
-                                    vault,
-                                    port_program,
-                                    reserve,
-                                    reserve_liquidity_supply,
-                                    reserve_collateral_mint,
-                                    source_liquidity,
-                                    lending_market,
-                                    transfer_authority,
-                                    destination_collateral, // maybe colle
-                                    lending_market_authority: lending_market_authority_pubkey,
-                                    token_program: spl_token::ID,
-                                    clock: sysvar::clock::ID,
-                                }
-                                .to_account_metas(None),
-                                data: magik_program::instruction::LendingCrank {
-                                    lending_amount: 100,
-                                }
-                                .data(),
-                                program_id: magik_program,
-                            },
-                        ],
-                        Some(&authority_pubkey),
-                        &[&authority],
-                        hash,
-                    );
-                    let sigs = rpc.send_and_confirm_transaction(&tx);
-                    println!("\n SIG: {:?} => {}", sigs, destination_collateral);
-                    thread::sleep(Duration::from_secs(5));
-                }
+                                reserve_liquidity_supply,
+                                reserve_collateral_mint,
+                                source_liquidity,
+                                lending_market,
+                                transfer_authority,
+                                destination_collateral, // maybe colle
+                                lending_market_authority: lending_market_authority_pubkey,
+                                token_program: spl_token::ID,
+                                clock: sysvar::clock::ID,
+                            }
+                            .to_account_metas(None),
+                            data: magik_program::instruction::LendingCrank {
+                                lending_amount: 9,
+                            }
+                            .data(),
+                            program_id: magik_program,
+                        },
+                    ],
+                    Some(&authority_pubkey),
+                    &[&authority],
+                    hash,
+                );
+                let sigs = rpc.send_and_confirm_transaction(&tx);
+                println!("\n SIG: {:?} => {}", sigs, destination_collateral);
+
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                let tk = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" After Lending Source_liquidity_data {:?}", tk.amount);
+
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let tk = Token::unpack(&dst_data).unwrap();
+                println!(" After lending Destination_collateral {:?}", tk.amount);
+                thread::sleep(Duration::from_secs(5));
+                // }
             });
             let harvest_handler = thread::spawn(move || {
                 // TODO: Calling harvest onchain
