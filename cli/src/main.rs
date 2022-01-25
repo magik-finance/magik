@@ -28,6 +28,7 @@ use spl_token::{
 use std::sync::{Arc, Mutex};
 use std::{mem::size_of, rc::Rc, str::FromStr, thread, time::Duration};
 
+mod token_account;
 use magik_program::{self, state};
 fn main() -> std::result::Result<(), ClientError> {
     let matches = clap::App::new("Magik CLI toolkit")
@@ -154,67 +155,22 @@ fn main() -> std::result::Result<(), ClientError> {
                 let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
                 let authority_pubkey = authority.pubkey();
                 let wallet = authority.to_bytes();
-                let cluster = anchor_client::Cluster::from_str(cluster_url.as_str()).unwrap();
-                let client = Client::new_with_options(
-                    cluster,
-                    Rc::new(authority),
-                    commitment_config::CommitmentConfig::processed(),
+
+                let destination_collateral = token_account::get_or_create_ata(
+                    &rpc,
+                    vault,
+                    reserve_collateral_mint,
+                    &authority,
                 );
-                let destination_collateral =
-                    spl_associated_token_account::get_associated_token_address(
-                        &vault,
-                        &reserve_collateral_mint,
-                    );
-                if rpc.get_account_data(&destination_collateral).is_err() {
-                    let authority = read_keypair_file(&_waller).expect("Requires a keypair file");
-                    let hash = rpc.get_latest_blockhash().unwrap();
-                    let create_token_acc_tx = Transaction::new_signed_with_payer(
-                        &[
-                            spl_associated_token_account::create_associated_token_account(
-                                &authority_pubkey,
-                                &vault,
-                                &reserve_collateral_mint,
-                            ),
-                        ],
-                        Some(&authority_pubkey),
-                        &[&authority],
-                        hash,
-                    );
-                    let sigs = rpc
-                        .send_and_confirm_transaction(&create_token_acc_tx)
-                        .unwrap();
-                    println!(
-                        "\n Newly create destination_collateral SIG: {} => {}",
-                        sigs, destination_collateral
-                    );
-                } else {
-                    println!(
-                        "\n>>> Already have destination_collateral  {}",
-                        destination_collateral
-                    );
-                }
                 let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
                 let tk = Token::unpack(&dst_data).unwrap();
-                println!(">>>>> TK {:?}", tk);
-
-                println!(" vault {} ", vault);
-                println!(" port_program {} ", port_program);
-                println!(" reserve {} ", reserve);
-                println!(" reserve_liquidity_supply {} ", reserve_liquidity_supply);
-                println!(" reserve_collateral_mint {} ", reserve_collateral_mint);
-                println!(" source_liquidity {} ", source_liquidity);
-                println!(" lending_market {} ", lending_market);
-                println!(" transfer_authority {} ", transfer_authority);
-                println!(" destination_collateral {} ", destination_collateral);
-                println!(
-                    " lending_market_authority {} ",
-                    lending_market_authority_pubkey
-                );
-                println!(" token_program {} ", spl_token::ID);
-                println!(" clock {} ", sysvar::clock::ID);
                 loop {
                     thread::sleep(Duration::from_secs(1));
                     let authority = Keypair::from_bytes(&wallet).unwrap();
+
+                    let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                    let tk = Token::unpack(&source_liquidity_data).unwrap();
+                    println!(" Source_liquidity_data {:?}", tk);
 
                     let hash = rpc.get_latest_blockhash().unwrap();
                     let tx = Transaction::new_signed_with_payer(
@@ -240,10 +196,7 @@ fn main() -> std::result::Result<(), ClientError> {
                                     clock: sysvar::clock::ID,
                                 }
                                 .to_account_metas(None),
-                                data: magik_program::instruction::LendingCrank {
-                                    port_program_id: port_program,
-                                }
-                                .data(),
+                                data: magik_program::instruction::LendingCrank {}.data(),
                                 program_id: magik_program,
                             },
                         ],
@@ -252,10 +205,7 @@ fn main() -> std::result::Result<(), ClientError> {
                         hash,
                     );
                     let sigs = rpc.send_and_confirm_transaction(&tx).unwrap();
-                    println!(
-                        "\n Newly create destination_collateral SIG: {} => {}",
-                        sigs, destination_collateral
-                    );
+                    println!("\n SIG: {} => {}", sigs, destination_collateral);
                 }
             });
             let harvest_handler = thread::spawn(move || {

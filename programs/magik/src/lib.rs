@@ -152,8 +152,7 @@ pub mod magik {
         Ok(())
     }
 
-    pub fn lending_crank(ctx: Context<LendingCrank>, port_program_id: Pubkey) -> ProgramResult {
-        msg!("Borrow {}", port_program_id);
+    pub fn lending_crank(ctx: Context<LendingCrank>) -> ProgramResult {
         let ref mut vault = ctx.accounts.vault;
 
         let port_program = ctx.accounts.port_program.to_account_info();
@@ -163,9 +162,10 @@ pub mod magik {
             vault.payer.as_ref(),
             &[vault.bump],
         ];
+        let port_program_id = port_program.key();
+        msg!("Borrow {}", port_program_id);
 
         let cpi_account = PortDeposit {
-            clock: ctx.accounts.clock.to_account_info(),
             destination_collateral: ctx.accounts.destination_collateral.to_account_info(),
             lending_market: ctx.accounts.lending_market.to_account_info(),
             lending_market_authority: ctx.accounts.lending_market_authority.to_account_info(),
@@ -175,6 +175,7 @@ pub mod magik {
             source_liquidity: ctx.accounts.source_liquidity.to_account_info(),
             transfer_authority: ctx.accounts.transfer_authority.to_account_info(),
             token_program: ctx.accounts.token_program.to_account_info(),
+            clock: ctx.accounts.clock.to_account_info(),
         };
 
         let signer_seeds = &[&seeds[..]];
@@ -182,16 +183,6 @@ pub mod magik {
             CpiContext::new_with_signer(port_program.clone(), cpi_account, signer_seeds);
 
         let amount = 1;
-        // let refresh_accounts = RefreshReserve {
-        //     clock: ctx.accounts.clock.to_account_info(),
-        //     reserve: ctx.accounts.reserve.to_account_info(),
-        //     oracle: ctx.accounts.oracle.to_account_info(),
-        // };
-
-        // refresh_port_reserve(
-        //     port_program_id,
-        //     CpiContext::new(port_program.clone(), refresh_accounts),
-        // )?;
         deposit_reserve(init_obligation_ctx, amount, port_program_id)?;
         Ok(())
     }
