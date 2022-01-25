@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
 use clap::{Result, SubCommand};
 use port_variable_rate_lending_instructions;
+use port_variable_rate_lending_instructions::instruction::refresh_obligation;
 use port_variable_rate_lending_instructions::instruction::refresh_reserve;
 use port_variable_rate_lending_instructions::{
     instruction::LendingInstruction, state as port_state,
@@ -42,7 +43,7 @@ fn main() -> std::result::Result<(), ClientError> {
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
                     .long("obligation")
-                    .default_value("AMSYSxjEALjWgmoCBbPwi8MZ2KCXzLWsMP2CCqxgFSNR"),
+                    .default_value("6WmjCB141XT82BBEdjBPnpssf25CKzHv1cHSchDQFY1n"),
             ),
         )
         .arg(
@@ -162,15 +163,20 @@ fn main() -> std::result::Result<(), ClientError> {
                     reserve_collateral_mint,
                     &authority,
                 );
-                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
-                let tk = Token::unpack(&dst_data).unwrap();
                 loop {
-                    thread::sleep(Duration::from_secs(1));
                     let authority = Keypair::from_bytes(&wallet).unwrap();
 
                     let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
                     let tk = Token::unpack(&source_liquidity_data).unwrap();
-                    println!(" Source_liquidity_data {:?}", tk);
+                    println!(" Source_liquidity_data {:?}", tk.amount);
+
+                    let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                    let tk = Token::unpack(&dst_data).unwrap();
+                    println!(" Destination_collateral {:?}", tk.amount);
+
+                    // let ob_data = rpc.get_account_data(&obligation).unwrap();
+                    // let obligation_state = port_state::Obligation::unpack(&ob_data).unwrap();
+                    // println!(" Obligation {:?}", obligation_state.);
 
                     let hash = rpc.get_latest_blockhash().unwrap();
                     let tx = Transaction::new_signed_with_payer(
@@ -180,6 +186,7 @@ fn main() -> std::result::Result<(), ClientError> {
                                 reserve,
                                 reserve_state.liquidity.oracle_pubkey,
                             ),
+                            // refresh_obligation(port_program, obligation, vec![reserve]),
                             Instruction {
                                 accounts: magik_program::accounts::LendingCrank {
                                     vault,
@@ -196,7 +203,10 @@ fn main() -> std::result::Result<(), ClientError> {
                                     clock: sysvar::clock::ID,
                                 }
                                 .to_account_metas(None),
-                                data: magik_program::instruction::LendingCrank {}.data(),
+                                data: magik_program::instruction::LendingCrank {
+                                    lending_amount: 100,
+                                }
+                                .data(),
                                 program_id: magik_program,
                             },
                         ],
@@ -204,8 +214,9 @@ fn main() -> std::result::Result<(), ClientError> {
                         &[&authority],
                         hash,
                     );
-                    let sigs = rpc.send_and_confirm_transaction(&tx).unwrap();
-                    println!("\n SIG: {} => {}", sigs, destination_collateral);
+                    let sigs = rpc.send_and_confirm_transaction(&tx);
+                    println!("\n SIG: {:?} => {}", sigs, destination_collateral);
+                    thread::sleep(Duration::from_secs(5));
                 }
             });
             let harvest_handler = thread::spawn(move || {
@@ -216,11 +227,12 @@ fn main() -> std::result::Result<(), ClientError> {
             harvest_handler.join().unwrap();
         }
         Some("init_obligation") => {
-            let nonce = Keypair::new().pubkey();
+            let nonce = Pubkey::new_unique();
             let (obligation, ob_bump) = Pubkey::find_program_address(
                 &[b"obligation", nonce.as_ref(), vault.as_ref()],
                 &magik_program,
             );
+
             let magik_client = client.lock().unwrap().program(magik_program);
             let lamports = magik_client
                 .rpc()
@@ -231,6 +243,8 @@ fn main() -> std::result::Result<(), ClientError> {
                 "Lamport {} space {} ob {} nonce {}",
                 lamports, space, obligation, nonce
             );
+
+            return Ok(());
             let rs = magik_client
                 .request()
                 .accounts(magik_program::accounts::Init {
