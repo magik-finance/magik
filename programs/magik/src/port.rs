@@ -133,7 +133,9 @@ pub struct InitObligation<'info> {
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program, sysvar};
 use anchor_spl::token::{self, Burn, Mint, MintTo, TokenAccount, Transfer};
-use port_variable_rate_lending_instructions::instruction::LendingInstruction;
+use port_variable_rate_lending_instructions::instruction::{
+    redeem_reserve_collateral, LendingInstruction,
+};
 use solana_program::instruction::Instruction;
 use solana_program::program::{invoke, invoke_signed};
 use solana_program::program_option::COption;
@@ -182,4 +184,54 @@ pub fn refresh_reserve(
         accounts,
         data: LendingInstruction::RefreshReserve.pack(),
     }
+}
+
+pub fn redeem<'a, 'b, 'c, 'info>(
+    program_id: Pubkey,
+    ctx: CpiContext<'a, 'b, 'c, 'info, PortRedeem<'info>>,
+    amount: u64,
+) -> ProgramResult {
+    let ix = redeem_reserve_collateral(
+        program_id,
+        amount,
+        ctx.accounts.source_collateral.key(),
+        ctx.accounts.destination_liquidity.key(),
+        ctx.accounts.reserve.key(),
+        ctx.accounts.reserve_collateral_mint.key(),
+        ctx.accounts.reserve_liquidity_supply.key(),
+        ctx.accounts.lending_market.key(),
+        ctx.accounts.transfer_authority.key(),
+    );
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.source_collateral,
+            ctx.accounts.destination_liquidity,
+            ctx.accounts.reserve,
+            ctx.accounts.reserve_collateral_mint,
+            ctx.accounts.reserve_liquidity_supply,
+            ctx.accounts.lending_market,
+            ctx.accounts.lending_market_authority,
+            ctx.accounts.transfer_authority,
+            ctx.accounts.clock,
+            ctx.accounts.token_program,
+            ctx.program,
+        ],
+        ctx.signer_seeds,
+    )
+}
+
+#[derive(Accounts)]
+pub struct PortRedeem<'info> {
+    pub source_collateral: AccountInfo<'info>,
+    pub destination_liquidity: AccountInfo<'info>,
+    pub reserve: AccountInfo<'info>,
+    pub reserve_collateral_mint: AccountInfo<'info>,
+    pub reserve_liquidity_supply: AccountInfo<'info>,
+    pub lending_market: AccountInfo<'info>,
+    pub lending_market_authority: AccountInfo<'info>,
+    pub transfer_authority: AccountInfo<'info>,
+    pub token_program: AccountInfo<'info>,
+    pub clock: AccountInfo<'info>,
 }

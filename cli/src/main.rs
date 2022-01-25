@@ -3,8 +3,10 @@ use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
 use clap::{Result, SubCommand};
 use port_variable_rate_lending_instructions;
-use port_variable_rate_lending_instructions::instruction::refresh_obligation;
 use port_variable_rate_lending_instructions::instruction::refresh_reserve;
+use port_variable_rate_lending_instructions::instruction::{
+    redeem_reserve_collateral, refresh_obligation,
+};
 use port_variable_rate_lending_instructions::{
     instruction::LendingInstruction, state as port_state,
 };
@@ -39,6 +41,7 @@ fn main() -> std::result::Result<(), ClientError> {
         .subcommand(SubCommand::with_name("init_obligation"))
         .subcommand(SubCommand::with_name("dst_collateral"))
         .subcommand(SubCommand::with_name("deposit"))
+        .subcommand(SubCommand::with_name("redeem"))
         .subcommand(
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
@@ -97,7 +100,6 @@ fn main() -> std::result::Result<(), ClientError> {
         commitment_config::CommitmentConfig::processed(),
     );
 
-    let client = Mutex::new(Arc::new(client));
     let lending_program = pubkey_of(&matches, "lending_program_id").unwrap();
 
     let rpc = RpcClient::new(cluster_url.clone());
@@ -174,10 +176,6 @@ fn main() -> std::result::Result<(), ClientError> {
                     let tk = Token::unpack(&dst_data).unwrap();
                     println!(" Destination_collateral {:?}", tk.amount);
 
-                    // let ob_data = rpc.get_account_data(&obligation).unwrap();
-                    // let obligation_state = port_state::Obligation::unpack(&ob_data).unwrap();
-                    // println!(" Obligation {:?}", obligation_state.);
-
                     let hash = rpc.get_latest_blockhash().unwrap();
                     let tx = Transaction::new_signed_with_payer(
                         &[
@@ -226,6 +224,82 @@ fn main() -> std::result::Result<(), ClientError> {
             lending_handler.join().unwrap();
             harvest_handler.join().unwrap();
         }
+        Some("redeem") => {
+            let source_liquidity = vault_token;
+            let reserve_liquidity_supply = reserve_state.liquidity.supply_pubkey;
+
+            let port_program = lending_program;
+            let transfer_authority = vault;
+            let (lending_market_authority, _bump_seed) =
+                Pubkey::find_program_address(&[&lending_market.as_ref()], &lending_program);
+
+            let redeem_handler = thread::spawn(move || {
+                let _waller = wallet.clone();
+                let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+                let cluster =
+                    anchor_client::Cluster::from_str(cluster_url.clone().as_str()).unwrap();
+
+                let client = Client::new_with_options(
+                    cluster,
+                    Rc::new(authority),
+                    commitment_config::CommitmentConfig::processed(),
+                );
+                let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+
+                let destination_collateral = token_account::get_or_create_ata(
+                    &rpc,
+                    vault,
+                    reserve_collateral_mint,
+                    &authority,
+                );
+
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                let tk = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" Source_liquidity_data {:?}", tk.amount);
+
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let tk = Token::unpack(&dst_data).unwrap();
+                println!(" Destination_collateral {:?}", tk.amount);
+
+                let magik_client = client.program(magik_program);
+                let rs = magik_client
+                    .request()
+                    .accounts(magik_program::accounts::RedeemCrank {
+                        vault,
+                        port_program,
+                        source_collateral: destination_collateral,
+                        destination_liquidity: source_liquidity,
+                        reserve,
+                        reserve_collateral_mint,
+                        reserve_liquidity_supply,
+                        lending_market,
+                        lending_market_authority,
+                        transfer_authority,
+                        token_program: spl_token::ID,
+                        clock: sysvar::clock::ID,
+                    })
+                    .args(magik_program::instruction::RedeemCrank { redeem_amount: 100 })
+                    .signer(&authority)
+                    .send();
+                println!("TX magik_client INIT: {:?} ", rs);
+                assert_eq!(rs.is_err(), false);
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let tk = Token::unpack(&dst_data).unwrap();
+                println!(" After after redeem Destination_collateral {:?}", tk.amount);
+
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                let tk = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" After redeem Source_liquidity_data {:?}", tk.amount);
+                thread::sleep(Duration::from_secs(5));
+                // }
+            });
+            let harvest_handler = thread::spawn(move || {
+                // TODO: Calling harvest onchain
+            });
+
+            redeem_handler.join().unwrap();
+            harvest_handler.join().unwrap();
+        }
         Some("init_obligation") => {
             let nonce = Pubkey::new_unique();
             let (obligation, ob_bump) = Pubkey::find_program_address(
@@ -233,7 +307,7 @@ fn main() -> std::result::Result<(), ClientError> {
                 &magik_program,
             );
 
-            let magik_client = client.lock().unwrap().program(magik_program);
+            let magik_client = client.program(magik_program);
             let lamports = magik_client
                 .rpc()
                 .get_minimum_balance_for_rent_exemption(space)
@@ -244,7 +318,6 @@ fn main() -> std::result::Result<(), ClientError> {
                 lamports, space, obligation, nonce
             );
 
-            return Ok(());
             let rs = magik_client
                 .request()
                 .accounts(magik_program::accounts::Init {

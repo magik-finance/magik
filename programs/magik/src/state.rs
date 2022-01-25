@@ -4,6 +4,29 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{pubkey::Pubkey, system_program};
 use anchor_spl::token::{self, Mint, TokenAccount};
 use std::mem::size_of;
+#[derive(Accounts)]
+pub struct RedeemCrank<'info> {
+    pub vault: ProgramAccount<'info, Vault>,
+    pub port_program: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    pub source_collateral: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub destination_liquidity: AccountInfo<'info>,
+    #[account(mut)]
+    pub reserve: AccountInfo<'info>,
+
+    pub reserve_collateral_mint: AccountInfo<'info>,
+    pub reserve_liquidity_supply: AccountInfo<'info>,
+    pub lending_market: AccountInfo<'info>,
+    pub lending_market_authority: AccountInfo<'info>,
+    pub transfer_authority: AccountInfo<'info>,
+
+    #[account(address = spl_token::ID)]
+    pub token_program: AccountInfo<'info>,
+    pub clock: Sysvar<'info, Clock>,
+}
 
 #[derive(Accounts)]
 pub struct LendingCrank<'info> {

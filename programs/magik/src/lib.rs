@@ -185,4 +185,38 @@ pub mod magik {
         deposit_reserve(init_obligation_ctx, lending_amount, port_program_id)?;
         Ok(())
     }
+
+    pub fn redeem_crank(ctx: Context<RedeemCrank>, redeem_amount: u64) -> ProgramResult {
+        let ref mut vault = ctx.accounts.vault;
+
+        let port_program = ctx.accounts.port_program.to_account_info();
+        let seeds = &[
+            b"vault".as_ref(),
+            vault.mint_token.as_ref(),
+            vault.payer.as_ref(),
+            &[vault.bump],
+        ];
+        let port_program_id = port_program.key();
+        msg!("redeem_crank {}", port_program_id);
+
+        let cpi_account = PortRedeem {
+            destination_liquidity: ctx.accounts.destination_liquidity.to_account_info(),
+            lending_market: ctx.accounts.lending_market.to_account_info(),
+            lending_market_authority: ctx.accounts.lending_market_authority.to_account_info(),
+            reserve: ctx.accounts.reserve.to_account_info(),
+            reserve_collateral_mint: ctx.accounts.reserve_collateral_mint.to_account_info(),
+            reserve_liquidity_supply: ctx.accounts.reserve_liquidity_supply.to_account_info(),
+            source_collateral: ctx.accounts.source_collateral.to_account_info(),
+            transfer_authority: ctx.accounts.transfer_authority.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+            clock: ctx.accounts.clock.to_account_info(),
+        };
+
+        let signer_seeds = &[&seeds[..]];
+        let ctx = CpiContext::new_with_signer(port_program.clone(), cpi_account, signer_seeds);
+
+        redeem(port_program_id, ctx, redeem_amount)?;
+
+        Ok(())
+    }
 }
