@@ -42,6 +42,7 @@ fn main() -> std::result::Result<(), ClientError> {
         .subcommand(SubCommand::with_name("dst_collateral"))
         .subcommand(SubCommand::with_name("deposit"))
         .subcommand(SubCommand::with_name("redeem"))
+        .subcommand(SubCommand::with_name("monitor"))
         .subcommand(
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
@@ -134,6 +135,30 @@ fn main() -> std::result::Result<(), ClientError> {
 
     let reserve_collateral_mint = reserve_state.collateral.mint_pubkey;
     match matches.subcommand_name() {
+        Some("monitor") => {
+            let source_liquidity = vault_token;
+
+            let (lending_market_authority, _bump_seed) =
+                Pubkey::find_program_address(&[&lending_market.as_ref()], &lending_program);
+
+            println!(">>>> {}", lending_market_authority);
+            let _waller = wallet.clone();
+            let authority = read_keypair_file(wallet.clone()).expect("Requires a keypair file");
+
+            let destination_collateral =
+                token_account::get_or_create_ata(&rpc, vault, reserve_collateral_mint, &authority);
+
+            loop {
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+                let src = Token::unpack(&source_liquidity_data).unwrap();
+                println!(" Source_liquidity_data {:?}", src.amount);
+
+                let dst_data = rpc.get_account_data(&destination_collateral).unwrap();
+                let dst = Token::unpack(&dst_data).unwrap();
+                println!(" Destination_collateral {:?}", dst.amount);
+                thread::sleep(Duration::from_secs(60 * 5));
+            }
+        }
         Some("crank") => {
             let matches = matches.subcommand_matches("crank").unwrap();
             let obligation = pubkey_of(&matches, "obligation").unwrap();
@@ -145,13 +170,6 @@ fn main() -> std::result::Result<(), ClientError> {
             let transfer_authority = vault;
             let (lending_market_authority, _bump_seed) =
                 Pubkey::find_program_address(&[&lending_market.as_ref()], &lending_program);
-
-            /// Number of bytes in a pubkey
-            pub const PUBKEY_BYTES: usize = 32;
-            let (lending_market_authority_pubkey, _bump_seed) = Pubkey::find_program_address(
-                &[&lending_market.to_bytes()[..PUBKEY_BYTES]],
-                &lending_program,
-            );
 
             let lending_handler = thread::spawn(move || {
                 let _waller = wallet.clone();
@@ -184,7 +202,6 @@ fn main() -> std::result::Result<(), ClientError> {
                             reserve,
                             reserve_state.liquidity.oracle_pubkey,
                         ),
-                        // refresh_obligation(port_program, obligation, vec![reserve]),
                         Instruction {
                             accounts: magik_program::accounts::LendingCrank {
                                 vault,
@@ -195,8 +212,8 @@ fn main() -> std::result::Result<(), ClientError> {
                                 source_liquidity,
                                 lending_market,
                                 transfer_authority,
-                                destination_collateral, // maybe colle
-                                lending_market_authority: lending_market_authority_pubkey,
+                                destination_collateral,
+                                lending_market_authority,
                                 token_program: spl_token::ID,
                                 clock: sysvar::clock::ID,
                             }
@@ -269,6 +286,7 @@ fn main() -> std::result::Result<(), ClientError> {
                 let dst = Token::unpack(&dst_data).unwrap();
                 println!(" Destination_collateral {:?}", dst.amount);
 
+                // return;
                 let authority_pubkey = authority.pubkey();
                 let hash = rpc.get_latest_blockhash().unwrap();
                 let tx = Transaction::new_signed_with_payer(
@@ -294,8 +312,10 @@ fn main() -> std::result::Result<(), ClientError> {
                                 clock: sysvar::clock::ID,
                             }
                             .to_account_metas(None),
-                            data: magik_program::instruction::RedeemCrank { redeem_amount: dst.amount }
-                                .data(),
+                            data: magik_program::instruction::RedeemCrank {
+                                redeem_amount: dst.amount,
+                            }
+                            .data(),
                             program_id: magik_program,
                         },
                     ],
@@ -378,3 +398,11 @@ fn main() -> std::result::Result<(), ClientError> {
     }
     Ok(())
 }
+
+// >>> Already have 9pogkAYWHv42z1w6AoThjVcWZPNNkD1hibj5DC3XoCjA
+//  Source_liquidity_data 2708101
+//  Destination_collateral 796939161
+
+//  SIG: Ok(2yMDDgUnenkV9FWr3tpESjhmBqTB7EYvrpWeTG8f7xCZNvrQ8ZzvPXWaeycXCy8froX7WLxjmjJu6aUgv6moEjzH)
+//  After after redeem Destination_collateral 0
+//  After redeem Source_liquidity_data 1002724424
