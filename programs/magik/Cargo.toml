@@ -29,4 +29,3 @@ port-variable-rate-lending-instructions = "0.3.0"
 solana-program-test = "1.9.4"
 solana-sdk = "1.9.4"
 assert_matches = "1.5.0"
-port-staking-instructions = {version="0.2.0"}

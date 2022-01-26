@@ -304,5 +304,32 @@ async fn test_init() {
     .is_err();
     assert_eq!(isErr, true);
 
-    helper::verify_token_amount(synth_mint, user_synth, 1000, &mut banks_client).await
+    helper::verify_token_amount(synth_mint, user_synth, 1000, &mut banks_client).await;
+
+    process_ins(
+        &mut banks_client,
+        &[Instruction {
+            program_id,
+            data: magik_program::instruction::Liquidate {}.data(),
+            accounts: magik_program::accounts::Liquidate {
+                vault,
+                vault_token,
+                synth_mint,
+                owner: user_keypair.pubkey(),
+                user_synth,
+                treasure,
+                user_token: user_ata,
+                system_program: system_program::id(),
+                rent: sysvar::rent::ID,
+                token_program: spl_token::id(),
+            }
+            .to_account_metas(None),
+        }],
+        &payer_keypair,
+        &[&user_keypair],
+    )
+    .await
+    .ok()
+    .unwrap_or_else(|| panic!("Can not Liquidate"));
+    helper::verify_token_amount(synth_mint, user_synth, borrow_amount, &mut banks_client).await;
 }

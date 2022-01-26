@@ -110,9 +110,35 @@ pub mod magik {
         let ref mut vault = ctx.accounts.vault;
         vault.total_deposit += amount;
 
-        let ref mut depositor = ctx.accounts.treasure;
-        depositor.current_deposit += amount;
+        let ref mut treasure = ctx.accounts.treasure;
+        treasure.current_deposit += amount;
 
+        Ok(())
+    }
+
+    pub fn liquidate(ctx: Context<Liquidate>) -> ProgramResult {
+        msg!("liquidate ");
+        let ref mut treasure = ctx.accounts.treasure;
+
+        // Burn synth token
+        let cpi_accounts = Burn {
+            mint: ctx.accounts.synth_mint.to_account_info(),
+            to: ctx.accounts.user_synth.to_account_info(),
+            authority: ctx.accounts.owner.clone(),
+        };
+        let cpi_program = ctx.accounts.token_program.clone();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::burn(cpi_ctx, treasure.current_borrow);
+
+        // Transfer back to user
+        let cpi_accounts = Transfer {
+            to: ctx.accounts.user_token.to_account_info().clone(),
+            from: ctx.accounts.vault_token.to_account_info().clone(),
+            authority: ctx.accounts.owner.clone(),
+        };
+        let cpi_program = ctx.accounts.token_program.clone();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(cpi_ctx, treasure.current_borrow)?;
         Ok(())
     }
 

@@ -181,6 +181,41 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
+pub struct Liquidate<'info> {
+    #[account(
+        mut,
+        close = owner,
+    )]
+    pub treasure: ProgramAccount<'info, Treasure>,
+
+    #[account(mut, has_one = owner)]
+    pub user_token: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub synth_mint: Account<'info, Mint>,
+
+    #[account(mut, constraint = vault.mint_token == user_token.mint)]
+    pub vault: ProgramAccount<'info, Vault>,
+
+    #[account(mut, constraint = vault_token.mint == vault.mint_token)]
+    pub vault_token: Account<'info, TokenAccount>,
+
+    #[account(mut, constraint = user_synth.mint == vault.synth_token)]
+    pub user_synth: Account<'info, TokenAccount>,
+
+    #[account(mut, signer)]
+    pub owner: AccountInfo<'info>,
+
+    #[account(address = spl_token::ID)]
+    pub token_program: AccountInfo<'info>,
+
+    #[account(address = system_program::ID)]
+    pub system_program: AccountInfo<'info>,
+
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
 #[instruction(bump: u8, amount: u64)]
 pub struct Borrow<'info> {
     #[account(

@@ -1633,7 +1633,6 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "assert_matches",
- "port-staking-instructions 0.2.0",
  "port-variable-rate-lending-instructions",
  "solana-program",
  "solana-program-test",
@@ -1982,23 +1981,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "port-staking-instructions"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58a0376f07714b1c0813b6140c8ee39eaa39a0482545b4c7dc4d894f74a9c7a9"
-dependencies = [
- "arrayref",
- "bytemuck",
- "num-derive",
- "num-traits",
- "solana-maths",
- "solana-program",
- "spl-token",
- "thiserror",
- "uint 0.8.5",
-]
-
-[[package]]
 name = "port-variable-rate-lending-instructions"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2008,7 +1990,7 @@ dependencies = [
  "bytemuck",
  "num-derive",
  "num-traits",
- "port-staking-instructions 0.1.7",
+ "port-staking-instructions",
  "solana-maths",
  "solana-program",
  "spl-token",
