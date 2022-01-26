@@ -136,12 +136,80 @@ pub struct Vault {
     pub synth_token: Pubkey, // LP token mint
     pub percent: u64,
     pub total_deposit: u64,
+
+    // Total amount of yield harvested from the lending program
+    pub total_yield_harvested: u64,
+    //
 }
 
 #[account]
 pub struct Treasure {
+    // Currently deposited amount of tokens
     pub current_deposit: u64,
+
+    // Currently outstanding amount of borrowed token
     pub current_borrow: u64,
+
+    // Current amount of credit accumulated through yield in ecxess of outstanding debt repayments
+    pub current_credit: u64,
+
+    // Total amount of yield this user has utilized to repay debt / issue credit
+    pub total_earned_yield: u64,
+
+    // Total vault yield at the point of last account update
+    // This is necessary to calculate the delta between how much yield the user has already been given their
+    // share off vs how much new yield they have a claim to
+    pub last_known_vault_yield: u64,
+}
+
+impl Treasure {
+    // This function should be called every time a user interacts with the Vault
+    // It calculates the earned yield and adjust debt and credit accordingly
+    pub fn use_earned_yield(&mut self, vault: &Vault) -> u64 {
+        let earned_yield =
+            self.calculate_earned_yield(vault.total_yield_harvested, vault.total_deposit);
+
+        // Reduce debt with earned yield
+        let current_debt = self.current_borrow;
+        let debt_after_auto_repay = current_debt as i128 - earned_yield as i128;
+        if (debt_after_auto_repay < 0) {
+            self.current_borrow = 0;
+            self.current_credit += (debt_after_auto_repay.abs()) as u64;
+        } else {
+            self.current_borrow -= earned_yield;
+        }
+
+        self.last_known_vault_yield = vault.total_yield_harvested;
+        self.total_earned_yield += earned_yield;
+
+        earned_yield
+    }
+
+    pub fn draw_credit(&mut self, amount: u64) -> u64 {
+        // Prioritise earned credit over issuing debt
+        let remaining_credit = self.current_credit as i128 - amount as i128;
+
+        // Amount is in excess of earned credit
+        if (remaining_credit < 0) {
+            self.current_credit = 0;
+            self.current_borrow += (remaining_credit.abs()) as u64;
+        // Amount is covered by earned credit
+        } else {
+            self.current_credit = remaining_credit as u64;
+        }
+
+        self.current_borrow
+    }
+
+    fn calculate_earned_yield(&self, vault_yield: u64, vault_total_deposit: u64) -> u64 {
+        if (self.current_deposit == 0) {
+            return 0;
+        }
+
+        let total_new_yield = vault_yield - self.last_known_vault_yield;
+        let user_share = self.current_deposit as f64 / vault_total_deposit as f64;
+        (user_share * self.current_deposit as f64) as u64
+    }
 }
 
 #[derive(Accounts)]

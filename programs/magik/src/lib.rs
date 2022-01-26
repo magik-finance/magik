@@ -98,6 +98,11 @@ pub mod magik {
 
     pub fn deposit(ctx: Context<Deposit>, bump: u8, amount: u64) -> ProgramResult {
         msg!("Deposit {}", amount);
+        let ref mut vault = ctx.accounts.vault;
+        let ref mut depositor = ctx.accounts.treasure;
+
+        depositor.use_earned_yield(vault);
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.user_token.to_account_info().clone(),
             to: ctx.accounts.vault_token.to_account_info().clone(),
@@ -107,10 +112,7 @@ pub mod magik {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
 
-        let ref mut vault = ctx.accounts.vault;
         vault.total_deposit += amount;
-
-        let ref mut depositor = ctx.accounts.treasure;
         depositor.current_deposit += amount;
 
         Ok(())
@@ -118,11 +120,18 @@ pub mod magik {
 
     pub fn borrow(ctx: Context<Borrow>, bump: u8, amount: u64) -> ProgramResult {
         msg!("Borrow {}", amount);
-        let ref mut treasure = ctx.accounts.treasure;
+        let ref mut depositor = ctx.accounts.treasure;
         let ref vault = ctx.accounts.vault;
-        let total_borrow = treasure.current_borrow + amount;
-        msg!("Current {} total {}", treasure.current_borrow, total_borrow);
-        if total_borrow / vault.percent * 100 > treasure.current_deposit {
+
+        depositor.use_earned_yield(vault);
+        let total_borrow = depositor.draw_credit(amount);
+
+        msg!(
+            "Current {} total {}",
+            depositor.current_borrow,
+            total_borrow
+        );
+        if total_borrow / vault.percent * 100 > depositor.current_deposit {
             return Err(VaultError::ExceedBorrowAmount.into());
         }
 
@@ -146,8 +155,6 @@ pub mod magik {
         );
 
         token::mint_to(mint_to_ctx, amount)?;
-
-        treasure.current_borrow += amount;
 
         Ok(())
     }
@@ -186,8 +193,13 @@ pub mod magik {
         Ok(())
     }
 
+    // TODO: Don't pass the redeem amount but calculate
+    // from total value locked in adapter and total deposit in vault
+    // For first prototype assume that redeem amount is the earned yield
     pub fn redeem_crank(ctx: Context<RedeemCrank>, redeem_amount: u64) -> ProgramResult {
         let ref mut vault = ctx.accounts.vault;
+
+        vault.total_yield_harvested += redeem_amount;
 
         let port_program = ctx.accounts.port_program.to_account_info();
         let seeds = &[
