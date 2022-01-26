@@ -1,8 +1,9 @@
 #![cfg(feature = "test-bpf")]
-
 use anchor_lang::prelude::*;
+use anchor_lang::AccountDeserialize;
 use anchor_lang::InstructionData;
 use magik_program;
+use magik_program::state::Treasure;
 use solana_program::system_instruction;
 use solana_program::system_program;
 use solana_program::sysvar;
@@ -216,13 +217,15 @@ async fn test_init() {
         &[b"treasure", vault.as_ref(), user_keypair.pubkey().as_ref()],
         &program_id,
     );
+    helper::verify_token_amount(mint_token, user_ata, INIT_AMOUNT, &mut banks_client).await;
+    let deposit_amount = 5_000;
     process_ins(
         &mut banks_client,
         &[Instruction {
             program_id,
             data: magik_program::instruction::Deposit {
                 bump: treasure_bump,
-                amount: 5000,
+                amount: deposit_amount,
             }
             .data(),
             accounts: magik_program::accounts::Deposit {
@@ -244,6 +247,23 @@ async fn test_init() {
     .await
     .ok()
     .unwrap_or_else(|| panic!("Can not Deposit"));
+
+    helper::verify_token_amount(
+        mint_token,
+        user_ata,
+        INIT_AMOUNT - deposit_amount,
+        &mut banks_client,
+    )
+    .await;
+
+    let treasure_data = banks_client
+        .get_account(treasure)
+        .await
+        .unwrap()
+        .unwrap()
+        .data;
+    let tr = Treasure::try_deserialize(&mut treasure_data.as_ref()).unwrap();
+    assert_eq!(tr.current_deposit, deposit_amount);
 
     let mut borrow_amount = 1000;
     process_ins(
@@ -274,6 +294,15 @@ async fn test_init() {
     .ok()
     .unwrap_or_else(|| panic!("Can not Borrow"));
     helper::verify_token_amount(synth_mint, user_synth, borrow_amount, &mut banks_client).await;
+
+    let treasure_data = banks_client
+        .get_account(treasure)
+        .await
+        .unwrap()
+        .unwrap()
+        .data;
+    let tr = Treasure::try_deserialize(&mut treasure_data.as_ref()).unwrap();
+    assert_eq!(tr.current_borrow, borrow_amount);
 
     borrow_amount = 3000;
     let isErr = process_ins(
@@ -331,5 +360,11 @@ async fn test_init() {
     .await
     .ok()
     .unwrap_or_else(|| panic!("Can not Liquidate"));
-    helper::verify_token_amount(synth_mint, user_synth, borrow_amount, &mut banks_client).await;
+
+    let treasure_data = banks_client.get_account(treasure).await.unwrap();
+    assert_eq!(treasure_data, None);
+
+    helper::verify_token_amount(synth_mint, user_synth, 0, &mut banks_client).await;
+
+    helper::verify_token_amount(mint_token, user_ata, INIT_AMOUNT, &mut banks_client).await;
 }

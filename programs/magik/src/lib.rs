@@ -130,15 +130,26 @@ pub mod magik {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::burn(cpi_ctx, treasure.current_borrow);
 
-        // Transfer back to user
-        let cpi_accounts = Transfer {
-            to: ctx.accounts.user_token.to_account_info().clone(),
-            from: ctx.accounts.vault_token.to_account_info().clone(),
-            authority: ctx.accounts.owner.clone(),
-        };
+        // // Transfer back to user
         let cpi_program = ctx.accounts.token_program.clone();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        token::transfer(cpi_ctx, treasure.current_borrow)?;
+        let seeds = &[
+            b"vault".as_ref(),
+            ctx.accounts.vault.mint_token.as_ref(),
+            ctx.accounts.vault.payer.as_ref(),
+            &[ctx.accounts.vault.bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+        let transfer_ctx = CpiContext::new_with_signer(
+            cpi_program,
+            Transfer {
+                from: ctx.accounts.vault_token.to_account_info().clone(),
+                to: ctx.accounts.user_token.to_account_info().clone(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            signer_seeds,
+        );
+
+        token::transfer(transfer_ctx, treasure.current_deposit)?;
         Ok(())
     }
 
