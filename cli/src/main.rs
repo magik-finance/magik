@@ -148,7 +148,25 @@ fn main() -> std::result::Result<(), ClientError> {
             let destination_collateral =
                 token_account::get_or_create_ata(&rpc, vault, reserve_collateral_mint, &authority);
 
+            let port_program = lending_program;
+            let authority_pubkey = authority.pubkey();
             loop {
+                let hash = rpc.get_latest_blockhash().unwrap();
+                let tx = Transaction::new_signed_with_payer(
+                    &[refresh_reserve(
+                        port_program,
+                        reserve,
+                        reserve_state.liquidity.oracle_pubkey,
+                    )],
+                    Some(&authority_pubkey),
+                    &[&authority],
+                    hash,
+                );
+                let sigs = rpc.send_and_confirm_transaction(&tx);
+                println!("\n SIG: {:?} => DST: {}", sigs, destination_collateral);
+
+                let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
+
                 let source_liquidity_data = rpc.get_account_data(&source_liquidity).unwrap();
                 let src = Token::unpack(&source_liquidity_data).unwrap();
                 println!(" Source_liquidity_data {:?}", src.amount);
