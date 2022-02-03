@@ -26,12 +26,25 @@ pub struct RedeemCrank<'info> {
     pub lending_market: AccountInfo<'info>,
     #[account(mut)]
     pub lending_market_authority: AccountInfo<'info>,
+
     #[account(mut)]
     pub transfer_authority: AccountInfo<'info>,
+
+    #[account(mut, constraint = vault.payer == payer.key() )]
+    pub payer: Signer<'info>,
 
     #[account(address = spl_token::ID)]
     pub token_program: AccountInfo<'info>,
     pub clock: Sysvar<'info, Clock>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateVault<'info> {
+    #[account(mut)]
+    pub vault: ProgramAccount<'info, Vault>,
+
+    #[account(mut, constraint = vault.payer == payer.key() )]
+    pub payer: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -40,6 +53,9 @@ pub struct LendingCrank<'info> {
     pub port_program: UncheckedAccount<'info>,
     #[account(mut)]
     pub source_liquidity: UncheckedAccount<'info>,
+
+    #[account(mut, constraint = vault.payer == payer.key() )]
+    pub payer: Signer<'info>,
 
     #[account(mut)]
     pub destination_collateral: UncheckedAccount<'info>,
@@ -128,6 +144,7 @@ pub struct Init<'info> {
 }
 
 #[account]
+#[derive(Debug)]
 pub struct Vault {
     pub bump: u8,
     pub payer: Pubkey,

@@ -2,6 +2,7 @@ use anchor_client::{solana_client::rpc_client::RpcClient, Client, ClientError};
 use anchor_lang::prelude::*;
 use anchor_lang::InstructionData;
 use clap::{Result, SubCommand};
+use magik_program::state::Vault;
 use port_variable_rate_lending_instructions;
 use port_variable_rate_lending_instructions::instruction::refresh_reserve;
 use port_variable_rate_lending_instructions::instruction::{
@@ -31,6 +32,7 @@ use spl_token::{
 use std::sync::{Arc, Mutex};
 use std::{mem::size_of, rc::Rc, str::FromStr, thread, time::Duration};
 
+use anchor_lang::AnchorDeserialize;
 mod token_account;
 use magik_program::{self, state};
 fn main() -> std::result::Result<(), ClientError> {
@@ -43,6 +45,13 @@ fn main() -> std::result::Result<(), ClientError> {
         .subcommand(SubCommand::with_name("deposit"))
         .subcommand(SubCommand::with_name("redeem"))
         .subcommand(SubCommand::with_name("monitor"))
+        .subcommand(
+            SubCommand::with_name("update_params").arg(
+                clap::Arg::with_name("percent")
+                    .long("percent")
+                    .default_value("50"),
+            ),
+        )
         .subcommand(
             SubCommand::with_name("crank").arg(
                 clap::Arg::with_name("obligation")
@@ -229,6 +238,7 @@ fn main() -> std::result::Result<(), ClientError> {
                                 reserve_collateral_mint,
                                 source_liquidity,
                                 lending_market,
+                                payer: authority_pubkey,
                                 transfer_authority,
                                 destination_collateral,
                                 lending_market_authority,
@@ -317,6 +327,7 @@ fn main() -> std::result::Result<(), ClientError> {
                         Instruction {
                             accounts: magik_program::accounts::RedeemCrank {
                                 vault,
+                                payer: authority_pubkey,
                                 port_program,
                                 source_collateral: destination_collateral,
                                 destination_liquidity: source_liquidity,
@@ -359,6 +370,23 @@ fn main() -> std::result::Result<(), ClientError> {
 
             redeem_handler.join().unwrap();
             harvest_handler.join().unwrap();
+        }
+        Some("update_params") => {
+            let magik_client = client.program(magik_program);
+
+            let rs = magik_client
+                .request()
+                .accounts(magik_program::accounts::UpdateVault {
+                    vault,
+                    payer: authority.pubkey(),
+                })
+                .args(magik_program::instruction::UpdateVault { percent: 50 })
+                .signer(&authority)
+                .send();
+            let vault_state = magik_client.account::<Vault>(vault).unwrap();
+            println!("PPPPPP {:?} ", vault_state);
+            println!("TX magik_client INIT: {:?} ", rs);
+            // assert_eq!(rs.is_err(), false);
         }
         Some("init_obligation") => {
             let nonce = Pubkey::new_unique();

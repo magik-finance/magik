@@ -96,6 +96,14 @@ pub mod magik {
         Ok(())
     }
 
+    pub fn update_vault(ctx: Context<UpdateVault>, percent: u64) -> ProgramResult {
+        msg!("update_vault {}", percent);
+        Parameters::verify_percent(percent);
+        let ref mut vault = ctx.accounts.vault;
+        vault.percent = percent;
+        Ok(())
+    }
+
     pub fn deposit(ctx: Context<Deposit>, bump: u8, amount: u64) -> ProgramResult {
         msg!("Deposit {}", amount);
         let cpi_accounts = Transfer {
@@ -154,9 +162,10 @@ pub mod magik {
     }
 
     pub fn borrow(ctx: Context<Borrow>, bump: u8, amount: u64) -> ProgramResult {
-        msg!("Borrow {}", amount);
+        msg!("Borrow {} ", amount);
         let ref mut treasure = ctx.accounts.treasure;
         let ref vault = ctx.accounts.vault;
+        msg!("Percent {} ", vault.percent);
         let total_borrow = treasure.current_borrow + amount;
         msg!("Current {} total {}", treasure.current_borrow, total_borrow);
         if total_borrow / vault.percent * 100 > treasure.current_deposit {
